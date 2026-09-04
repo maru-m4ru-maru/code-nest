@@ -109,12 +109,13 @@ if "SimpleWebSocketServer" not in sys.modules:
 }
 
 async function installScratchattach(py,spec){
+  await prepareScratchattachBrowserCompat(py);
   await py.runPythonAsync(`
 import micropip
 await micropip.install(${JSON.stringify(spec)}, deps=False)
 await micropip.install(${JSON.stringify(SCRATCHATTACH_RUNTIME_DEPS)})
 `);
-  await prepareScratchattachBrowserCompat(py);\n  await py.runPythonAsync(`\nimport scratchattach\n`);
+  await py.runPythonAsync(`import scratchattach`);
 }
 
 async function runPipInstall(specs){
