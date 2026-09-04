@@ -10,6 +10,7 @@ The UI is designed like a small premium developer app while staying deployable o
 - 📝 Markdown cells with live preview
 - 🖥️ Browser Terminal / Bash-like shell
 - ⌁ Interactive Bash Console with command history and tab completion
+- 📦 Browser `pip install` bridge for Pyodide / micropip
 - ▶ Run one cell or run every Python cell
 - 💾 Automatic local saving
 - 🌙 Light / dark theme
@@ -24,6 +25,15 @@ The Bash Console in the current GitHub Pages build is a **browser-only Bash-like
 
 Supported commands include `help`, `pwd`, `ls`, `cd`, `mkdir`, `touch`, `cat`, `echo`, `rm`, `clear`, `uname`, `whoami`, `date`, and `python`.
 
+The shell also recognizes:
+
+```bash
+pip install scratchattach
+python -m pip install scratchattach
+```
+
+These install commands are routed to Pyodide's `micropip` inside the same browser Python runtime used by Code cells. This is **not** a normal OS-level `pip` or system package manager.
+
 Use **↑ / ↓** to move through command history, **Tab** for basic completion, and **Ctrl+L** to clear the console.
 
 For a future real Linux Bash environment, Code Nest would need a server/container runtime. WebContainers are another browser-based option for Node.js and shell-like workloads, but they require cross-origin isolation headers such as COOP/COEP. See the WebContainers docs for deployment requirements.
@@ -31,6 +41,8 @@ For a future real Linux Bash environment, Code Nest would need a server/containe
 ## Python runtime
 
 Python execution is performed locally in the browser with Pyodide. The first Python run may take a little longer because the runtime is downloaded into the browser.
+
+Packages installed through `pip install` use `micropip`, which supports pure-Python wheels and Pyodide-compatible wheels. Packages that require native extensions unavailable for WebAssembly may still fail to install.
 
 ## Deploy
 
