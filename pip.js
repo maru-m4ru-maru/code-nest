@@ -165,9 +165,13 @@
             return globalThis.__codeNestPyodide;
         }
 
+        if (typeof globalThis.codeNestLoadPython === "function") {
+            return await globalThis.codeNestLoadPython();
+        }
+
         if (typeof globalThis.loadPyodide !== "function") {
             throw new Error(
-                "Pyodide が読み込まれていません。先に Python ランタイムを起動してください。"
+                "Pythonランタイムを起動できません。ページを再読み込みしてもう一度お試しください。"
             );
         }
 
