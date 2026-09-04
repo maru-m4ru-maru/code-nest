@@ -1,4 +1,4 @@
-// Code Nest Worker V0.3.6
+// Code Nest Worker V0.3.8
 // Share API + Scratch API CORS proxy
 
 export default {
@@ -89,7 +89,7 @@ export default {
             method: "GET",
             headers: {
               "Accept": "application/json",
-              "User-Agent": "Code-Nest/0.3.7"
+              "User-Agent": "Code-Nest/0.3.8"
             }
           }
         );
@@ -177,7 +177,7 @@ export default {
             method: "GET",
             headers: {
               "Accept": "application/json",
-              "User-Agent": "Code-Nest/0.3.7"
+              "User-Agent": "Code-Nest/0.3.8"
             }
           }
         );
@@ -251,7 +251,7 @@ export default {
             "Upgrade": "websocket",
             "Cookie": "scratchsessionsid=" + sessionId + ";",
             "Origin": "https://scratch.mit.edu",
-            "User-Agent": "Code-Nest/0.3.7"
+            "User-Agent": "Code-Nest/0.3.8"
           }
         });
 
@@ -733,7 +733,7 @@ Shared with Code Nest
             "Code Nest Backend",
 
           version:
-            "0.3.7",
+            "0.3.8",
 
           share:
             "/share/:id",
