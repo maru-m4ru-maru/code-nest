@@ -1,5 +1,5 @@
 // Code Nest - pip.js
-// V0.3.3
+// V0.3.4
 // Pyodide / micropip / ScratchAttach browser compatibility.
 
 (() => {
@@ -438,6 +438,7 @@ import requests
 from scratchattach.cloud.cloud import ScratchCloud
 
 _CODE_NEST_CLOUD_ENDPOINT = _CODE_NEST_WORKER + "/scratch-cloud"
+_CODE_NEST_WORKER_CLOUD_READ_ENDPOINT = _CODE_NEST_WORKER + "/scratch-cloud"
 
 def _cn_cloud_request(cloud, variable, value):
     session = getattr(cloud, "_session", None)
@@ -576,5 +577,5 @@ print("ScratchAttach browser compatibility ready")
     // Pyodide may already have been loaded before this module executes.
     wrapPyodideLoader();
 
-    log("pip.js loaded — V0.3.2");
+    log("pip.js loaded — V0.3.4");
 })();
