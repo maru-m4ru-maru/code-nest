@@ -65,7 +65,7 @@ async function getCodeNestPyodide(){
   throw new Error('Code Nest: Pyodide runtime could not be captured');
 }
 
-const SCRATCHATTACH_RUNTIME_DEPS=['websocket-client','requests','bs4','typing-extensions','aiohttp','rich'];
+const SCRATCHATTACH_VERSION='2.2.3';\nconst SCRATCHATTACH_RUNTIME_DEPS=['websocket-client','requests','bs4','typing-extensions','aiohttp','rich'];
 
 function isScratchattachSpec(spec){
   return /^scratchattach(?:[<>=!~\[]|$)/i.test(spec.trim());
@@ -114,7 +114,7 @@ import micropip
 await micropip.install(${JSON.stringify(spec)}, deps=False)
 await micropip.install(${JSON.stringify(SCRATCHATTACH_RUNTIME_DEPS)})
 `);
-  await prepareScratchattachBrowserCompat(py);
+  await prepareScratchattachBrowserCompat(py);\n  await py.runPythonAsync(`\nimport scratchattach\n`);
 }
 
 async function runPipInstall(specs){
@@ -156,7 +156,7 @@ print("Import check: " + ", ".join(loaded))
     for(const spec of scratchSpecs)await installScratchattach(py,spec);
     await py.runPythonAsync(`
 import scratchattach
-print("Successfully installed: scratchattach (browser-compatible mode)")
+print("Successfully installed: scratchattach ${SCRATCHATTACH_VERSION} (browser-compatible mode)")
 print("Import check: scratchattach " + getattr(scratchattach, "__version__", "loaded"))
 print("Note: browser_cookie3 and SimpleWebSocketServer are skipped for the browser runtime.")
 `);
