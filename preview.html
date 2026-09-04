@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#07131d">
+<title>Code Nest — Create anything</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,"Segoe UI","Noto Sans JP",sans-serif;color:#eef7ff;background:#07131d}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(circle at 20% 0%,#12344a 0,transparent 38%),radial-gradient(circle at 90% 20%,#102b3d 0,transparent 35%),#07131d}
+.wrap{width:min(1120px,calc(100% - 32px));margin:auto;padding:34px 0 60px}
+nav{display:flex;align-items:center;justify-content:space-between}.brand{display:flex;gap:12px;align-items:center;font-weight:800}.logo{width:42px;height:42px;border-radius:13px;background:#0c2533;padding:7px}.logo svg{width:100%;height:100%}.pill{font-size:13px;color:#a9c5d5;border:1px solid #244555;border-radius:999px;padding:8px 13px}
+.hero{text-align:center;padding:92px 0 70px}.eyebrow{color:#52c9ff;font-weight:800;letter-spacing:.08em;text-transform:uppercase;font-size:13px}.hero h1{font-size:clamp(42px,8vw,78px);line-height:1;margin:16px 0;letter-spacing:-.055em}.hero h1 span{color:#55caff}.hero p{max-width:700px;margin:0 auto;color:#adc0cc;font-size:18px;line-height:1.75}.actions{display:flex;justify-content:center;gap:12px;margin-top:30px;flex-wrap:wrap}.btn{display:inline-block;padding:13px 19px;border-radius:13px;text-decoration:none;font-weight:800}.primary{background:#35bdf5;color:#04121a}.secondary{border:1px solid #315667;color:#e8f7ff;background:#0c1e29}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.card{border:1px solid #203d4d;background:rgba(11,29,40,.82);border-radius:20px;padding:22px;min-height:180px}.icon{font-size:28px}.card h2{font-size:18px;margin:14px 0 8px}.card p{margin:0;color:#91aab8;line-height:1.6;font-size:14px}.preview{margin-top:18px;border:1px solid #203d4d;border-radius:24px;background:#0a1822;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.28)}.bar{padding:12px 16px;border-bottom:1px solid #203d4d;display:flex;gap:7px}.dot{width:9px;height:9px;border-radius:50%;background:#416071}.mock{display:grid;grid-template-columns:180px 1fr;min-height:310px}.side{border-right:1px solid #203d4d;padding:18px}.side b{display:block;margin-bottom:16px}.side div{padding:9px 10px;color:#829daa;font-size:13px}.side .active{background:#123446;color:#dff6ff;border-radius:9px}.editor{padding:24px}.code{background:#071018;border:1px solid #1c3542;border-radius:14px;padding:18px;color:#bdeeff;font:14px/1.8 ui-monospace,SFMono-Regular,Menlo,monospace}.output{margin-top:12px;color:#8fb1bf;font:13px ui-monospace,monospace}footer{text-align:center;color:#657e8c;margin-top:45px;font-size:13px}
+@media(max-width:800px){.grid{grid-template-columns:1fr 1fr}.mock{grid-template-columns:1fr}.side{display:none}}@media(max-width:520px){.grid{grid-template-columns:1fr}.wrap{width:min(100% - 22px,1120px)}.hero{padding:65px 0 50px}}
+</style>
+</head>
+<body>
+<div class="wrap">
+<nav><div class="brand"><div class="logo"><svg viewBox="0 0 64 64"><path d="M31 10c-9 0-9 6-9 6v8h15v3H19c-9 0-9 8-9 8s0 9 9 9h6v-6h-7c-3 0-3-4 0-4h20c4 0 7-3 7-7V19c0-5-5-9-14-9Z" fill="#55caff"/><path d="M37 54c9 0 9-6 9-6v-8H31v-3h18c9 0 9-8 9-8s0-9-9-9h-6v6h7c3 0 3 4 0 4H30c-4 0-7 3-7 7v8c0 5 5 9 14 9Z" fill="#078bd7"/><path d="M8 43c10-7 18-7 28-1 9 5 16 5 20 1M7 50c10-7 19-7 29-1 9 5 17 5 21 1" fill="none" stroke="#55caff" stroke-width="4" stroke-linecap="round"/></svg></div><span>Code Nest</span></div><span class="pill">V0.3.8 · local-first</span></nav>
+<section class="hero"><div class="eyebrow">Notebook Studio</div><h1>ひとつの場所から、<span>なんでも作る。</span></h1><p>Python、Webサイト、ゲーム、アプリ、API、ツール。思いついたものをコードにして、ブラウザだけで試せるクリエイティブワークスペース。</p><div class="actions"><a class="btn primary" href="index.html">Code Nestを開く →</a><a class="btn secondary" href="#features">できることを見る</a></div></section>
+<section id="features" class="grid">
+<div class="card"><div class="icon">🐍</div><h2>Python</h2><p>NotebookでPythonを書いて実行。パッケージもブラウザ環境で扱えます。</p></div>
+<div class="card"><div class="icon">🎮</div><h2>ゲーム</h2><p>HTML・CSS・JavaScriptでゲームのプロトタイプをすぐ作れます。</p></div>
+<div class="card"><div class="icon">🌐</div><h2>ホームページ</h2><p>Webサイトを作って、見た目とコードを同じ場所で調整できます。</p></div>
+<div class="card"><div class="icon">🛠️</div><h2>アプリ・ツール</h2><p>APIやブラウザ機能を組み合わせて、自分だけのツールを作れます。</p></div>
+</section>
+<div class="preview"><div class="bar"><i class="dot"></i><i class="dot"></i><i class="dot"></i></div><div class="mock"><aside class="side"><b>Code Nest</b><div class="active">◫ Notebook</div><div>⌕ 検索</div><div>⇩ 書き出す</div></aside><main class="editor"><h2>Welcome to Code Nest</h2><div class="code">print("Hello, Code Nest!")<br><br>for thing in ["game", "website", "app", "tool"]:<br>&nbsp;&nbsp;&nbsp;&nbsp;print("Build:", thing)</div><div class="output">Build: game　 Build: website　 Build: app　 Build: tool</div></main></div></div>
+<footer>Code Nest · Build something great.</footer>
+</div>
+</body>
+</html>
