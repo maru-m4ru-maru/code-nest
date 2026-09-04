@@ -332,7 +332,7 @@ print("Browser compatibility mode enabled")
             );
 
             try {
-                await pyodide.loadPackage(["lz4", "beautifulsoup4"]);
+                await pyodide.loadPackage(["lz4", "beautifulsoup4", "requests"]);
                 log("lz4 OK");
             } finally {
                 setLoading(false);
