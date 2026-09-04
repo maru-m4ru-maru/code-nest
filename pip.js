@@ -1,7 +1,6 @@
 // Code Nest - pip.js
-// V0.3
-// Pyodide 上で pip / micropip を使えるようにする。
-// ScratchAttach はブラウザ環境向け互換処理を入れる。
+// V0.3.2
+// Pyodide / micropip / ScratchAttach browser compatibility.
 
 (() => {
     "use strict";
@@ -13,9 +12,146 @@
 
     let pipReady = false;
     let scratchAttachReady = false;
+    let loadingCount = 0;
 
     function log(message) {
         console.log("[Code Nest pip]", message);
+    }
+
+    // ------------------------------------------------------------
+    // Loading guard
+    // ------------------------------------------------------------
+
+    function ensureLoadingUI() {
+        let el = document.getElementById("codeNestLoading");
+
+        if (el) return el;
+
+        el = document.createElement("div");
+        el.id = "codeNestLoading";
+        el.innerHTML = `
+            <div class="cn-loading-card">
+                <div class="cn-spinner"></div>
+                <strong id="codeNestLoadingTitle">読み込み中…</strong>
+                <span id="codeNestLoadingText">
+                    しばらくお待ちください
+                </span>
+            </div>
+        `;
+
+        Object.assign(el.style, {
+            position: "fixed",
+            inset: "0",
+            zIndex: "99999",
+            display: "none",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "rgba(9, 12, 18, .34)",
+            backdropFilter: "blur(4px)",
+            pointerEvents: "all"
+        });
+
+        const style = document.createElement("style");
+        style.textContent = `
+            #codeNestLoading .cn-loading-card {
+                min-width: 220px;
+                max-width: calc(100vw - 40px);
+                padding: 22px 24px;
+                border: 1px solid rgba(127, 135, 155, .22);
+                border-radius: 16px;
+                background: rgba(255,255,255,.96);
+                color: #171a21;
+                box-shadow: 0 20px 70px rgba(0,0,0,.18);
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 8px;
+                text-align: center;
+            }
+
+            body.dark #codeNestLoading .cn-loading-card {
+                background: rgba(18,23,32,.97);
+                color: #f3f5f8;
+            }
+
+            #codeNestLoading strong {
+                font-size: 14px;
+            }
+
+            #codeNestLoading span {
+                color: #737b89;
+                font-size: 11px;
+            }
+
+            #codeNestLoading .cn-spinner {
+                width: 27px;
+                height: 27px;
+                border-radius: 50%;
+                border: 3px solid rgba(91,92,226,.18);
+                border-top-color: #5b5ce2;
+                animation: cnSpin .75s linear infinite;
+            }
+
+            @keyframes cnSpin {
+                to { transform: rotate(360deg); }
+            }
+        `;
+
+        document.head.appendChild(style);
+        document.body.appendChild(el);
+
+        return el;
+    }
+
+    function setLoading(loading, title = "読み込み中…", text = "しばらくお待ちください") {
+        if (!document.body) return;
+
+        const el = ensureLoadingUI();
+
+        if (loading) {
+            loadingCount++;
+            el.querySelector("#codeNestLoadingTitle").textContent = title;
+            el.querySelector("#codeNestLoadingText").textContent = text;
+            el.style.display = "flex";
+            document.body.dataset.codeNestBusy = "true";
+        } else {
+            loadingCount = Math.max(0, loadingCount - 1);
+
+            if (loadingCount === 0) {
+                el.style.display = "none";
+                delete document.body.dataset.codeNestBusy;
+            }
+        }
+    }
+
+    globalThis.codeNestSetLoading = setLoading;
+
+    // loadPyodide が実行されるときにもロード中UIを出す。
+    function wrapPyodideLoader() {
+        if (
+            typeof globalThis.loadPyodide !== "function" ||
+            globalThis.__codeNestLoadPyodideWrapped
+        ) {
+            return;
+        }
+
+        const original = globalThis.loadPyodide;
+
+        globalThis.loadPyodide = async function (...args) {
+            setLoading(
+                true,
+                "Pythonを読み込み中…",
+                "初回起動では少し時間がかかります"
+            );
+
+            try {
+                return await original.apply(this, args);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        globalThis.__codeNestLoadPyodideWrapped = true;
     }
 
     function escapePythonString(value) {
@@ -23,17 +159,19 @@
     }
 
     async function ensurePyodide() {
+        wrapPyodideLoader();
+
         if (globalThis.__codeNestPyodide) {
             return globalThis.__codeNestPyodide;
         }
 
-        if (typeof loadPyodide !== "function") {
+        if (typeof globalThis.loadPyodide !== "function") {
             throw new Error(
                 "Pyodide が読み込まれていません。先に Python ランタイムを起動してください。"
             );
         }
 
-        const pyodide = await loadPyodide({
+        const pyodide = await globalThis.loadPyodide({
             indexURL:
                 `https://cdn.jsdelivr.net/pyodide/v${PYODIDE_VERSION}/full/`
         });
@@ -45,19 +183,37 @@
     async function ensureMicropip(pyodide) {
         if (pipReady) return;
 
-        await pyodide.loadPackage("micropip");
-        await pyodide.runPythonAsync(`
+        setLoading(
+            true,
+            "Pythonパッケージを準備中…",
+            "micropip を読み込んでいます"
+        );
+
+        try {
+            await pyodide.loadPackage("micropip");
+
+            await pyodide.runPythonAsync(`
 import micropip
 print("micropip OK")
 `);
 
-        pipReady = true;
+            pipReady = true;
+        } finally {
+            setLoading(false);
+        }
     }
 
     async function installPackage(pyodide, packageSpec) {
         await ensureMicropip(pyodide);
 
-        const result = await pyodide.runPythonAsync(`
+        setLoading(
+            true,
+            "パッケージをインストール中…",
+            packageSpec
+        );
+
+        try {
+            await pyodide.runPythonAsync(`
 import micropip
 
 package_name = ${escapePythonString(packageSpec)}
@@ -68,71 +224,71 @@ await micropip.install(package_name)
 
 print(f"Successfully installed: {package_name}")
 `);
+        } finally {
+            setLoading(false);
+        }
 
-        return result;
+        return `Successfully installed: ${packageSpec}`;
     }
+
+    // ------------------------------------------------------------
+    // ScratchAttach
+    // ------------------------------------------------------------
 
     async function setupScratchAttach(pyodide) {
         if (scratchAttachReady) return;
 
         await ensureMicropip(pyodide);
 
-        // SSL は ScratchAttach の依存処理で参照されることがある。
+        setLoading(
+            true,
+            "ScratchAttachを準備中…",
+            "ブラウザ互換レイヤーを構築しています"
+        );
+
         try {
-            await pyodide.loadPackage("ssl");
-            log("ssl OK");
-        } catch (error) {
-            log("ssl load skipped: " + error);
-        }
+            // ScratchAttach 2.2.3 は requests / SSL / WebSocket 系を
+            // 利用するため、ブラウザで問題になる部分を先に準備する。
 
-        // ------------------------------------------------------------
-        // Browser compatibility stubs
-        //
-        // ScratchAttach は Python デスクトップ環境を前提として
-        // SimpleWebSocketServer / browser_cookie3 などを import
-        // することがあるため、ブラウザでは安全なダミーモジュールを用意。
-        // ------------------------------------------------------------
+            try {
+                await pyodide.loadPackage("ssl");
+                log("ssl OK");
+            } catch (error) {
+                log("ssl package is unavailable; continuing with browser mode");
+            }
 
-        const compatibilityCode = `
+            await pyodide.runPythonAsync(`
 import sys
 import types
 
-# ============================================================
+# ------------------------------------------------------------
 # SimpleWebSocketServer
-# ============================================================
+# ------------------------------------------------------------
 
 class _CodeNestWebSocketServer:
     def __init__(self, *args, **kwargs):
         raise RuntimeError(
-            "Code Nest browser mode does not support starting "
-            "a local WebSocket server."
+            "Local WebSocket servers are not supported in "
+            "Code Nest browser mode."
         )
 
     def serveforever(self, *args, **kwargs):
         raise RuntimeError(
-            "Code Nest browser mode does not support local "
-            "WebSocket servers."
+            "Local WebSocket servers are not supported in "
+            "Code Nest browser mode."
         )
 
 _simple_ws = types.ModuleType("SimpleWebSocketServer")
 _simple_ws.WebSocket = object
 _simple_ws.SimpleWebSocketServer = _CodeNestWebSocketServer
+_simple_ws.SimpleSSLWebSocketServer = _CodeNestWebSocketServer
+
 sys.modules["SimpleWebSocketServer"] = _simple_ws
 
-# ============================================================
-# SimpleSSLWebSocketServer
-# ============================================================
-
-_ssl_ws = types.ModuleType("SimpleSSLWebSocketServer")
-_ssl_ws.SimpleSSLWebSocketServer = _CodeNestWebSocketServer
-sys.modules["SimpleSSLWebSocketServer"] = _ssl_ws
-
-# ============================================================
+# ------------------------------------------------------------
 # browser_cookie3
-# ============================================================
+# ------------------------------------------------------------
 
-# browser_cookie3 はPCのブラウザCookie DBを読むためのものなので、
-# Code Nest のブラウザ実行環境では実際には使用しない。
 _cookie = types.ModuleType("browser_cookie3")
 
 class _DummyCookieJar:
@@ -152,15 +308,13 @@ _cookie.chromium = _dummy_cookie_loader
 sys.modules["browser_cookie3"] = _cookie
 
 print("Browser compatibility mode enabled")
-`;
+`);
 
-        await pyodide.runPythonAsync(compatibilityCode);
+            // --------------------------------------------------------
+            // Install scratchattach
+            // --------------------------------------------------------
 
-        // ============================================================
-        // ScratchAttach をインストール
-        // ============================================================
-
-        await pyodide.runPythonAsync(`
+            await pyodide.runPythonAsync(`
 import micropip
 
 await micropip.install(
@@ -170,253 +324,141 @@ await micropip.install(
 print("Successfully installed: scratchattach ${SCRATCHATTACH_VERSION}")
 `);
 
-        // ============================================================
-        // import
-        // ============================================================
+            // --------------------------------------------------------
+            // Import
+            // --------------------------------------------------------
 
-        await pyodide.runPythonAsync(`
+            await pyodide.runPythonAsync(`
 import scratchattach
-
 print("Import check: scratchattach OK")
 `);
 
-        // ============================================================
-        // Code Nest 用 HTTP レイヤー
-        //
-        // scratchattach.utils.requests の実装を直接利用するのではなく、
-        // Scratch API の GET を JavaScript fetch → Code Nest Worker
-        // 経由で取得する。
-        //
-        // これによりブラウザの CORS 制約を回避する。
-        // ============================================================
+            // --------------------------------------------------------
+            // Browser HTTP bridge
+            //
+            // Important:
+            // Do NOT replace scratchattach.utils.requests.get directly.
+            // ScratchAttach 2.x uses requests.Session underneath.
+            //
+            // We rewrite Scratch URLs to the Code Nest Worker BEFORE
+            // requests performs the actual browser request.
+            // This keeps the normal synchronous requests API intact.
+            // --------------------------------------------------------
 
-        const requestBridge = `
-import json
+            await pyodide.runPythonAsync(`
 import urllib.parse
-import types
-import asyncio
+import requests
 
-import js
+_CODE_NEST_WORKER = ${escapePythonString(WORKER_URL)}
 
-_WORKER_URL = ${escapePythonString(WORKER_URL)}
+_ALLOWED_SCRATCH_HOSTS = {
+    "api.scratch.mit.edu",
+    "scratch.mit.edu",
+    "clouddata.scratch.mit.edu"
+}
 
-class CodeNestResponse:
-    def __init__(self, status_code, headers, text):
-        self.status_code = int(status_code)
-        self.headers = dict(headers)
-        self.text = str(text)
-        self.content = self.text.encode("utf-8")
+_original_session_request = requests.sessions.Session.request
 
-    def json(self):
-        return json.loads(self.text)
+def _code_nest_request(self, method, url, *args, **kwargs):
+    try:
+        parsed = urllib.parse.urlparse(str(url))
 
-    def raise_for_status(self):
-        if self.status_code >= 400:
-            raise RuntimeError(
-                f"HTTP {self.status_code}: {self.text[:500]}"
+        if (
+            parsed.scheme == "https"
+            and parsed.hostname in _ALLOWED_SCRATCH_HOSTS
+        ):
+            encoded = urllib.parse.quote(
+                str(url),
+                safe=""
             )
 
-    @property
-    def ok(self):
-        return 200 <= self.status_code < 400
-
-
-async def _fetch_worker(url, method="GET", headers=None, data=None, json_data=None):
-    headers = headers or {}
-
-    encoded_url = urllib.parse.quote(str(url), safe="")
-    proxy_url = (
-        f"{_WORKER_URL}/scratch-proxy?url={encoded_url}"
-    )
-
-    options = {
-        "method": method,
-        "headers": headers
-    }
-
-    if json_data is not None:
-        options["headers"] = dict(headers)
-        options["headers"]["Content-Type"] = "application/json"
-        options["body"] = json.dumps(json_data)
-
-    elif data is not None:
-        options["body"] = str(data)
-
-    response = await js.fetch(proxy_url, options)
-
-    text = await response.text()
-
-    try:
-        js_headers = response.headers
-        header_dict = {}
-
-        for key in [
-            "content-type",
-            "content-length",
-            "etag",
-            "cache-control",
-            "date"
-        ]:
-            try:
-                value = js_headers.get(key)
-                if value is not None:
-                    header_dict[key] = str(value)
-            except Exception:
-                pass
+            url = (
+                f"{_CODE_NEST_WORKER}/scratch-proxy"
+                f"?url={encoded}"
+            )
 
     except Exception:
-        header_dict = {}
+        # If URL parsing fails, preserve requests' normal behaviour.
+        pass
 
-    return CodeNestResponse(
-        int(response.status),
-        header_dict,
-        text
-    )
-
-
-async def _get_async(url, **kwargs):
-    return await _fetch_worker(
+    return _original_session_request(
+        self,
+        method,
         url,
-        method="GET",
-        headers=kwargs.get("headers"),
-        data=kwargs.get("data"),
-        json_data=kwargs.get("json")
+        *args,
+        **kwargs
     )
 
-
-async def _post_async(url, **kwargs):
-    return await _fetch_worker(
-        url,
-        method="POST",
-        headers=kwargs.get("headers"),
-        data=kwargs.get("data"),
-        json_data=kwargs.get("json")
-    )
-
-
-async def _put_async(url, **kwargs):
-    return await _fetch_worker(
-        url,
-        method="PUT",
-        headers=kwargs.get("headers"),
-        data=kwargs.get("data"),
-        json_data=kwargs.get("json")
-    )
-
-
-async def _delete_async(url, **kwargs):
-    return await _fetch_worker(
-        url,
-        method="DELETE",
-        headers=kwargs.get("headers"),
-        data=kwargs.get("data"),
-        json_data=kwargs.get("json")
-    )
-
-
-def _run_async(coro):
-    try:
-        loop = asyncio.get_running_loop()
-    except RuntimeError:
-        loop = None
-
-    if loop is None:
-        return asyncio.run(coro)
-
-    # Pyodide のトップレベルでは通常ここに来ないが、
-    # 念のため現在のイベントループを利用する。
-    return coro
-
-
-def get(url, **kwargs):
-    return _run_async(_get_async(url, **kwargs))
-
-
-def post(url, **kwargs):
-    return _run_async(_post_async(url, **kwargs))
-
-
-def put(url, **kwargs):
-    return _run_async(_put_async(url, **kwargs))
-
-
-def delete(url, **kwargs):
-    return _run_async(_delete_async(url, **kwargs))
-
-
-# ------------------------------------------------------------
-# scratchattach.utils.requests に公開
-# ------------------------------------------------------------
-
-import scratchattach.utils.requests as sa_requests
-
-sa_requests.get = get
-sa_requests.post = post
-sa_requests.put = put
-sa_requests.delete = delete
+requests.sessions.Session.request = _code_nest_request
 
 print("Code Nest Scratch API bridge enabled")
-`;
+`);
 
-        await pyodide.runPythonAsync(requestBridge);
+            // --------------------------------------------------------
+            // Final import check
+            // --------------------------------------------------------
 
-        // ============================================================
-        // ScratchAttach の簡単な確認
-        // ============================================================
-
-        try {
             await pyodide.runPythonAsync(`
 import scratchattach
-
 print("ScratchAttach browser compatibility ready")
 `);
-        } catch (error) {
-            console.warn(
-                "[Code Nest] ScratchAttach compatibility check failed:",
-                error
-            );
-        }
 
-        scratchAttachReady = true;
+            scratchAttachReady = true;
+        } finally {
+            setLoading(false);
+        }
     }
 
     async function pipInstall(packageSpec) {
         const pyodide = await ensurePyodide();
 
-        // ScratchAttach は専用処理
+        // app.js currently passes an array for arguments.
+        // Normalize it here so both strings and arrays work.
+        let normalized;
+
+        if (Array.isArray(packageSpec)) {
+            normalized = packageSpec.join(" ").trim();
+        } else {
+            normalized = String(packageSpec ?? "").trim();
+        }
+
+        if (!normalized) {
+            throw new Error("pip: package name is missing");
+        }
+
+        const lower = normalized.toLowerCase();
+
         if (
-            String(packageSpec)
-                .trim()
-                .toLowerCase()
-                .startsWith("scratchattach")
+            lower === "scratchattach" ||
+            lower.startsWith("scratchattach ") ||
+            lower.startsWith("scratchattach==") ||
+            lower.startsWith("scratchattach>=")
         ) {
             await setupScratchAttach(pyodide);
 
             return (
-                `Successfully installed: ${packageSpec}\n` +
-                `Import check: scratchattach OK\n` +
-                `Import check: ssl OK\n` +
-                `Browser compatibility mode enabled`
+                `Successfully installed: ${normalized}\n` +
+                "Import check: scratchattach OK\n" +
+                "Browser compatibility mode enabled"
             );
         }
 
-        await installPackage(pyodide, packageSpec);
-
-        return `Successfully installed: ${packageSpec}`;
+        return await installPackage(
+            pyodide,
+            normalized
+        );
     }
-
-    // ------------------------------------------------------------
-    // Bash Console から利用する API
-    // ------------------------------------------------------------
 
     globalThis.codeNestPipInstall = pipInstall;
 
-    // 直接呼び出したい場合用
     globalThis.setupCodeNestScratchAttach = async () => {
         const pyodide = await ensurePyodide();
         await setupScratchAttach(pyodide);
         return true;
     };
 
-    log("pip.js loaded");
+    // Pyodide may already have been loaded before this module executes.
+    wrapPyodideLoader();
+
+    log("pip.js loaded — V0.3.2");
 })();
