@@ -342,27 +342,22 @@ print("Browser compatibility mode enabled")
 import micropip
 
 # ScratchAttach lists SimpleWebSocketServer as a dependency,
-# but Code Nest provides a browser-only compatibility module above.
-# Do not ask micropip to install the unavailable server package.
-try:
-    await micropip.install(
-        "websocket-client",
-        deps=True
-    );
+# but Code Nest provides a browser-only compatibility module.
+# Install websocket-client explicitly, then install scratchattach
+# without resolving the unavailable server package.
+
+await micropip.install(
+    "websocket-client",
+    deps=True
+)
 
 await micropip.install(
     "scratchattach==${SCRATCHATTACH_VERSION}",
     deps=False
 )
-except TypeError:
-    # Older micropip versions may not expose deps=.
-    await micropip.install(
-        "scratchattach==${SCRATCHATTACH_VERSION}",
-        keep_going=True
-    )
 
 print("Successfully installed: scratchattach ${SCRATCHATTACH_VERSION}")
-`);
+`)
 
             // --------------------------------------------------------
             // Import
