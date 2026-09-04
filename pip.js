@@ -11,9 +11,7 @@ function parsePipInstall(input){
   if(!match)return null;
   const raw=match[1].trim();
   const parts=raw.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g)||[];
-  const specs=parts
-    .filter(x=>x && !x.startsWith('-'))
-    .map(x=>x.replace(/^['"]|['"]$/g,''));
+  const specs=parts.filter(x=>x&&!x.startsWith('-')).map(x=>x.replace(/^['"]|['"]$/g,''));
   return specs.length?specs:null;
 }
 
@@ -21,13 +19,11 @@ function packageImportName(spec){
   return spec.split(/[<>=!~\[]/,1)[0].trim().replace(/-/g,'_');
 }
 
-// Capture the Pyodide instance created by app.js without creating a second runtime.
-// app.js dynamically injects pyodide.js only when Python is first used.
 if(!globalThis.__codeNestPipHookInstalled){
   globalThis.__codeNestPipHookInstalled=true;
   const originalAppendChild=document.head.appendChild.bind(document.head);
   document.head.appendChild=node=>{
-    if(node?.src && /pyodide(?:\.min)?\.js(?:\?|$)/i.test(node.src)){
+    if(node?.src&&/pyodide(?:\.min)?\.js(?:\?|$)/i.test(node.src)){
       node.addEventListener('load',()=>{
         const originalLoadPyodide=globalThis.loadPyodide;
         if(typeof originalLoadPyodide!=='function'||originalLoadPyodide.__codeNestWrapped)return;
@@ -46,9 +42,6 @@ if(!globalThis.__codeNestPipHookInstalled){
 
 async function getCodeNestPyodide(){
   if(globalThis.__codeNestPyodide)return globalThis.__codeNestPyodide;
-  // Trigger the existing runtime loader by running a tiny Python cell through the UI.
-  // We do this only when no runtime exists yet. After the first Python load, the hook above
-  // stores the same Pyodide instance globally.
   const addButton=document.querySelector('#addCodeBtn');
   if(!addButton)throw new Error('Code Nest: Codeセル追加ボタンが見つかりません');
   addButton.click();
@@ -65,39 +58,63 @@ async function getCodeNestPyodide(){
   while(Date.now()<deadline){
     await new Promise(resolve=>setTimeout(resolve,100));
     if(globalThis.__codeNestPyodide)return globalThis.__codeNestPyodide;
-    if(output && output.textContent && output.textContent!=='実行中…')break;
+    if(output&&output.textContent&&output.textContent!=='実行中…')break;
   }
   if(globalThis.__codeNestPyodide)return globalThis.__codeNestPyodide;
   cell.remove();
   throw new Error('Code Nest: Pyodide runtime could not be captured');
 }
 
-const SCRATCHATTACH_BROWSER_INCOMPATIBLE=['browser_cookie3'];
-const SCRATCHATTACH_RUNTIME_DEPS=[
-  'websocket-client',
-  'requests',
-  'bs4',
-  'SimpleWebSocketServer',
-  'typing-extensions',
-  'aiohttp',
-  'rich'
-];
+const SCRATCHATTACH_RUNTIME_DEPS=['websocket-client','requests','bs4','typing-extensions','aiohttp','rich'];
 
 function isScratchattachSpec(spec){
   return /^scratchattach(?:[<>=!~\[]|$)/i.test(spec.trim());
 }
 
+async function prepareScratchattachBrowserCompat(py){
+  // scratchattach imports SimpleWebSocketServer during module initialization, but the
+  // desktop-only package is not available as a pure-Python wheel for Pyodide. Inject a
+  // minimal compatibility module so importing scratchattach can succeed. Any attempt to
+  // start the local desktop server fails with a clear browser-runtime error.
+  await py.runPythonAsync(`
+import sys
+import types
+
+if "SimpleWebSocketServer" not in sys.modules:
+    mod=types.ModuleType("SimpleWebSocketServer")
+
+    class WebSocket:
+        def __init__(self,*args,**kwargs):
+            self.data=""
+            self.address=kwargs.get("address",("0.0.0.0",0))
+        def sendMessage(self,*args,**kwargs):
+            raise RuntimeError("SimpleWebSocketServer is unavailable in the Code Nest browser runtime")
+        def close(self,*args,**kwargs):
+            return None
+
+    class SimpleWebSocketServer:
+        def __init__(self,*args,**kwargs):
+            self.hostname=args[0] if args else kwargs.get("hostname","")
+            self.port=args[1] if len(args)>1 else kwargs.get("port",0)
+            self.websocketclass=kwargs.get("websocketclass")
+        def serveforever(self):
+            raise RuntimeError("SimpleWebSocketServer is unavailable in the Code Nest browser runtime")
+        def close(self):
+            return None
+
+    mod.WebSocket=WebSocket
+    mod.SimpleWebSocketServer=SimpleWebSocketServer
+    sys.modules["SimpleWebSocketServer"]=mod
+`);
+}
+
 async function installScratchattach(py,spec){
-  // scratchattach declares browser_cookie3 as a dependency for desktop-browser-cookie
-  // extraction. That dependency pulls native crypto packages that cannot be installed in
-  // the WebAssembly browser runtime. scratchattach itself handles the missing optional
-  // browser-cookie module at import time, so install the package without dependencies and
-  // provide the browser-compatible runtime dependencies explicitly.
   await py.runPythonAsync(`
 import micropip
 await micropip.install(${JSON.stringify(spec)}, deps=False)
 await micropip.install(${JSON.stringify(SCRATCHATTACH_RUNTIME_DEPS)})
 `);
+  await prepareScratchattachBrowserCompat(py);
 }
 
 async function runPipInstall(specs){
@@ -125,7 +142,6 @@ for name in mods:
 print("Successfully installed: " + ", ".join(${JSON.stringify(normalSpecs)}))
 print("Import check: " + ", ".join(loaded))
 `;
-
     let captured='';
     py.setStdout({batched:s=>{captured+=s+'\n'}});
     py.setStderr({batched:s=>{captured+=s+'\n'}});
@@ -142,10 +158,10 @@ print("Import check: " + ", ".join(loaded))
 import scratchattach
 print("Successfully installed: scratchattach (browser-compatible mode)")
 print("Import check: scratchattach " + getattr(scratchattach, "__version__", "loaded"))
-print("Note: browser_cookie3 is intentionally skipped in Code Nest because browser cookie extraction is not available from Pyodide/WebAssembly.")
+print("Note: browser_cookie3 and SimpleWebSocketServer are skipped for the browser runtime.")
 `);
     if(captured.trim())return captured.trimEnd();
-    return 'Successfully installed: scratchattach (browser-compatible mode)\nImport check: scratchattach loaded\nNote: browser_cookie3 is intentionally skipped in Code Nest because browser cookie extraction is not available from Pyodide/WebAssembly.';
+    return 'Successfully installed: scratchattach (browser-compatible mode)\nImport check: scratchattach loaded\nNote: browser_cookie3 and SimpleWebSocketServer are skipped for the browser runtime.';
   }
 
   return `Successfully installed: ${normalSpecs.join(', ')}`;
@@ -215,8 +231,6 @@ async function handlePipCommand(command,context,terminalCell=null){
   return false;
 }
 
-// Terminal cells submit with Enter. Capture early so app.js's normal terminal runner
-// does not interpret pip as an unknown command.
 document.addEventListener('keydown',async event=>{
   if(event.key!=='Enter'||event.shiftKey)return;
   const terminal=event.target.closest?.('.terminal-input');
@@ -228,7 +242,6 @@ document.addEventListener('keydown',async event=>{
   await handlePipCommand(command,'terminal',terminal.closest('.cell'));
 },true);
 
-// Standalone Bash Console submit.
 document.addEventListener('submit',async event=>{
   if(event.target?.id!=='bashForm')return;
   const input=document.querySelector('#bashInput');
