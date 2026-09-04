@@ -89,7 +89,7 @@ export default {
             method: "GET",
             headers: {
               "Accept": "application/json",
-              "User-Agent": "Code-Nest/0.3"
+              "User-Agent": "Code-Nest/0.3.7"
             }
           }
         );
@@ -177,7 +177,7 @@ export default {
             method: "GET",
             headers: {
               "Accept": "application/json",
-              "User-Agent": "Code-Nest/0.3.6"
+              "User-Agent": "Code-Nest/0.3.7"
             }
           }
         );
@@ -251,7 +251,7 @@ export default {
             "Upgrade": "websocket",
             "Cookie": "scratchsessionsid=" + sessionId + ";",
             "Origin": "https://scratch.mit.edu",
-            "User-Agent": "Code-Nest/0.3.6"
+            "User-Agent": "Code-Nest/0.3.7"
           }
         });
 
@@ -733,7 +733,7 @@ Shared with Code Nest
             "Code Nest Backend",
 
           version:
-            "0.3.6",
+            "0.3.7",
 
           share:
             "/share/:id",
