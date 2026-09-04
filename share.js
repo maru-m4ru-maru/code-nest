@@ -44,39 +44,55 @@ function showShareResult(url) {
   const existing = document.querySelector('#shareResult');
   existing?.remove();
 
+  const previewUrl = url.includes('?') ? url + '&view=preview' : url + '?view=preview';
+  const codeUrl = url.includes('?') ? url + '&view=code' : url + '?view=code';
+
   const box = document.createElement('div');
   box.id = 'shareResult';
   box.style.cssText = 'position:fixed;inset:0;z-index:9999;display:grid;place-items:center;background:rgba(15,18,30,.45);backdrop-filter:blur(8px);padding:20px';
   box.innerHTML = `
-    <div style="width:min(560px,100%);background:var(--panel,#fff);color:var(--text,#111827);border:1px solid rgba(120,120,140,.22);border-radius:22px;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,.22)">
-      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:14px">
-        <div><div style="font-size:20px;font-weight:800">🔗 Notebookを共有</div><div style="opacity:.7;margin-top:4px">このURLを送れば、誰でも共有ページを開けます。</div></div>
+    <div style="width:min(640px,100%);background:var(--panel,#fff);color:var(--text,#111827);border:1px solid rgba(120,120,140,.22);border-radius:22px;padding:24px;box-shadow:0 24px 80px rgba(0,0,0,.22)">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:18px">
+        <div><div style="font-size:20px;font-weight:800">Share your project</div><div style="opacity:.7;margin-top:4px">コード用とプレビュー用のURLを分けて共有できます。</div></div>
         <button id="shareResultClose" style="border:0;background:transparent;font-size:26px;cursor:pointer">×</button>
       </div>
-      <input id="shareResultUrl" readonly value="${url.replace(/"/g, '&quot;')}" style="box-sizing:border-box;width:100%;padding:12px 14px;border-radius:12px;border:1px solid rgba(120,120,140,.3);background:rgba(127,127,127,.07);color:inherit;font:inherit">
-      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px">
-        <button id="shareOpen" style="padding:11px 15px;border-radius:11px;border:1px solid rgba(120,120,140,.3);background:transparent;color:inherit;cursor:pointer">開く</button>
-        <button id="shareCopy" style="padding:11px 15px;border-radius:11px;border:0;background:#7c3aed;color:#fff;font-weight:700;cursor:pointer">URLをコピー</button>
+
+      <div style="display:grid;gap:12px">
+        <label style="display:grid;gap:6px">
+          <span style="font-size:12px;font-weight:700;opacity:.65">CODE</span>
+          <input id="shareCodeUrl" readonly value="${codeUrl.replace(/"/g, '&quot;')}" style="box-sizing:border-box;width:100%;padding:12px 14px;border-radius:12px;border:1px solid rgba(120,120,140,.3);background:rgba(127,127,127,.07);color:inherit;font:inherit">
+        </label>
+
+        <label style="display:grid;gap:6px">
+          <span style="font-size:12px;font-weight:700;opacity:.65">PREVIEW</span>
+          <input id="sharePreviewUrl" readonly value="${previewUrl.replace(/"/g, '&quot;')}" style="box-sizing:border-box;width:100%;padding:12px 14px;border-radius:12px;border:1px solid rgba(120,120,140,.3);background:rgba(127,127,127,.07);color:inherit;font:inherit">
+        </label>
+      </div>
+
+      <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap">
+        <button id="shareCodeOpen" style="padding:11px 15px;border-radius:11px;border:1px solid rgba(120,120,140,.3);background:transparent;color:inherit;cursor:pointer">コードを開く</button>
+        <button id="sharePreviewOpen" style="padding:11px 15px;border-radius:11px;border:1px solid rgba(120,120,140,.3);background:transparent;color:inherit;cursor:pointer">プレビューを開く</button>
+        <button id="shareCopyAll" style="padding:11px 15px;border-radius:11px;border:0;background:#7c3aed;color:#fff;font-weight:700;cursor:pointer">URLをコピー</button>
       </div>
     </div>`;
 
   document.body.appendChild(box);
   box.querySelector('#shareResultClose').onclick = () => box.remove();
-  box.querySelector('#shareOpen').onclick = () => window.open(url, '_blank', 'noopener,noreferrer');
-  box.querySelector('#shareCopy').onclick = async () => {
+  box.querySelector('#shareCodeOpen').onclick = () => window.open(codeUrl, '_blank', 'noopener,noreferrer');
+  box.querySelector('#sharePreviewOpen').onclick = () => window.open(previewUrl, '_blank', 'noopener,noreferrer');
+  box.querySelector('#shareCopyAll').onclick = async () => {
     try {
-      await copyText(url);
-      box.querySelector('#shareCopy').textContent = 'コピーしました ✓';
+      await copyText(codeUrl + '\\n' + previewUrl);
+      box.querySelector('#shareCopyAll').textContent = 'コピーしました ✓';
     } catch {
-      box.querySelector('#shareResultUrl').select();
-      box.querySelector('#shareCopy').textContent = '選択しました';
+      box.querySelector('#shareCodeUrl').select();
+      box.querySelector('#shareCopyAll').textContent = '選択しました';
     }
   };
   box.addEventListener('click', (event) => {
     if (event.target === box) box.remove();
   });
 }
-
 async function runShare() {
   const button = document.querySelector('#shareBtn');
   if (!button) return;
