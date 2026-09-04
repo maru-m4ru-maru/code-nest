@@ -2,7 +2,7 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#f7f8fc"><meta name="description" content="Code Nest — browser notebook workspace">
+<meta name="theme-color" content="#f7f7f9"><meta name="description" content="Code Nest — browser notebook workspace">
 <title>Code Nest</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23121822'/%3E%3Cpath d='M17 24l11 8-11 8M34 40h13' fill='none' stroke='%23fff' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,7 +19,7 @@
   <button class="new-btn" id="newNotebookBtn"><span>＋</span> 新しいNotebook</button>
   <nav class="side-nav">
     <button class="nav-item active"><span>◫</span> Notebook</button>
-    <button class="nav-item" id="focusSearch"><span>⌕</span> 検索 <kbd>⌘ K</kbd></button>
+    <button class="nav-item" id="focusSearch"><span>⌕</span> 検索</button>
     <button class="nav-item" id="exportBtn"><span>⇩</span> 書き出す</button>
   </nav>
   <div class="side-section-title">ワークスペース</div>
@@ -46,11 +46,10 @@
     <button class="tool-btn" id="addMarkdownBtn">＋ Markdown</button>
     <button class="tool-btn terminal-tool" id="addTerminalBtn">＋ Terminal</button>
     <span class="divider"></span>
-    <button class="tool-btn ghost" id="clearBtn">⌘ 出力を消去</button>
+    <button class="tool-btn ghost" id="clearBtn">出力を消去</button>
   </div>
   <div class="toolbar-right">
     <span class="runtime-pill"><i></i><span id="runtimeStatus">ブラウザ実行環境</span></span>
-    <button class="icon-btn small" id="helpBtn" title="ショートカット">?</button>
   </div>
 </div>
 
@@ -76,12 +75,11 @@
   </section>
 </main>
 
-<footer class="statusbar"><span>Code Nest <b>•</b> local-first</span><span id="shortcutHint">⌘K 検索　·　Shift+Enter 実行</span></footer>
+<footer class="statusbar"><span>Code Nest <b>•</b> local-first</span><span>Python + Terminal workspace</span></footer>
 </div>
 </div>
 
-<div class="modal-backdrop" id="commandModal" aria-hidden="true"><div class="command-modal"><div class="command-head"><span>⌕</span><input id="commandInput" placeholder="コマンドを検索…" autocomplete="off"><kbd>Esc</kbd></div><div class="command-list" id="commandList"></div><div class="command-foot">↑↓ 移動　Enter 実行</div></div></div>
-<div class="modal-backdrop" id="helpModal" aria-hidden="true"><div class="help-modal"><button class="modal-close" data-close="helpModal">×</button><h2>Code Nest ショートカット</h2><div class="shortcut-grid"><div><kbd>⌘ K</kbd><span>検索 / Command palette</span></div><div><kbd>Shift + Enter</kbd><span>現在のセルを実行</span></div><div><kbd>⌘ Enter</kbd><span>現在のセルを実行</span></div><div><kbd>Esc</kbd><span>モーダルを閉じる</span></div></div></div></div>
+<div class="modal-backdrop" id="commandModal" aria-hidden="true"><div class="command-modal"><div class="command-head"><span>⌕</span><input id="commandInput" placeholder="コマンドを検索…" autocomplete="off"><kbd>Esc</kbd></div><div class="command-list" id="commandList"></div><div class="command-foot">クリックして実行</div></div></div>
 <div id="toast" class="toast" role="status" aria-live="polite"></div>
 <script type="module" src="app.js"></script>
 </body></html>
