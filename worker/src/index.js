@@ -1,38 +1,90 @@
-const cors={"Access-Control-Allow-Origin":"*","Access-Control-Allow-Methods":"GET, POST, OPTIONS","Access-Control-Allow-Headers":"Content-Type"};
-const json=(data,status=200)=>Response.json(data,{status,headers:cors});
-const esc=(v)=>String(v??"").replace(/[&<>\"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#39;"}[c]));
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
+    const cors = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type"
+    };
 
-function sharePage(data,id){
-  const cells=Array.isArray(data.cells)?data.cells:[{type:"code",source:data.code||"",output:""}];
-  const body=cells.map((c,i)=>{
-    const type=c.type||"code";
-    const label=type==="markdown"?"Markdown":type==="terminal"?"Terminal":"Code";
-    const source=esc(c.source||"");
-    const output=esc(c.output||"");
-    return `<article class="cell"><div class="label">${i+1} · ${esc(label)}</div><pre>${source}</pre>${output?`<div class="out"><small>Output</small><pre>${output}</pre></div>`:""}</article>`;
-  }).join("");
-  return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(data.title||"Shared Notebook")} · Code Nest</title><style>:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#161827;background:#f5f6fb}*{box-sizing:border-box}body{margin:0}main{width:min(980px,100%);margin:auto;padding:42px 18px 72px}.head{display:flex;justify-content:space-between;gap:16px;align-items:center;margin-bottom:24px}.brand{font-weight:800;letter-spacing:-.03em}.brandmark{display:inline-grid;place-items:center;width:34px;height:34px;margin-right:9px;border-radius:10px;background:linear-gradient(135deg,#8b3dff,#4f7cff);color:#fff}.sub{margin-top:5px;color:#73788c;font-size:13px}.actions{display:flex;gap:8px}.btn{border:1px solid #dfe2ec;background:#fff;color:#1b1d2d;border-radius:11px;padding:10px 13px;font-weight:700;cursor:pointer}.hero{padding:25px;border-radius:20px;margin-bottom:18px;border:1px solid #e3e6f0;background:linear-gradient(135deg,rgba(139,61,255,.10),rgba(79,124,255,.08))}.hero h1{margin:0;font-size:clamp(26px,5vw,42px);letter-spacing:-.04em}.meta{margin-top:7px;color:#73788c;font-size:13px}.cell{padding:17px 18px;margin:12px 0;border:1px solid #e1e4ed;border-radius:16px;background:#fff;box-shadow:0 8px 24px rgba(34,38,58,.05)}.label{font-size:12px;font-weight:800;color:#7c3aed;letter-spacing:.08em;text-transform:uppercase;margin-bottom:10px}.cell pre,.out pre{margin:0;white-space:pre-wrap;overflow:auto;font:13px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}.out{margin-top:13px;padding-top:12px;border-top:1px dashed #dfe2eb}.out small{display:block;color:#7b8092;font-weight:800;margin-bottom:5px}.foot{text-align:center;color:#878c9f;font-size:12px;margin-top:24px}@media(prefers-color-scheme:dark){:root{color:#f2f4fb;background:#0d1017}.cell,.btn{background:#151922;color:#f2f4fb;border-color:#2a2f3c}.hero{border-color:#2a2f3c;background:linear-gradient(135deg,rgba(139,61,255,.15),rgba(79,124,255,.10))}.sub,.meta,.foot,.out small{color:#99a0b6}.head a{color:#b9b4ff}}</style></head><body><main><div class="head"><div><div class="brand"><span class="brandmark">&lt;/&gt;</span>Code Nest</div><div class="sub">Shared Notebook · ${esc(id)}</div></div><div class="actions"><button class="btn" id="copy">URLをコピー</button><button class="btn" id="open">Code Nestで開く</button></div></div><section class="hero"><h1>${esc(data.title||"Untitled Notebook")}</h1><div class="meta">共有Notebook · ${cells.length} cells</div></section>${body}<div class="foot">Shared with Code Nest · Cloudflare Workers + KV</div></main><script>document.getElementById('copy').onclick=()=>navigator.clipboard?.writeText(location.href).then(()=>document.getElementById('copy').textContent='コピーしました ✓');document.getElementById('open').onclick=()=>location.href='https://maru-m4ru-maru.github.io/code-nest/';</script></body></html>`;
+    if (request.method === "OPTIONS") return new Response(null, { headers: cors });
+
+    if (request.method === "POST" && url.pathname === "/share") {
+      try {
+        const data = await request.json();
+        const id = crypto.randomUUID().replaceAll("-", "").slice(0, 8);
+        const notebook = {
+          title: data.title || "Untitled Notebook",
+          cells: Array.isArray(data.cells) ? data.cells.map(cell => ({
+            type: cell.type || "code",
+            source: cell.source || "",
+            output: cell.output || ""
+          })) : [{
+            type: "code",
+            source: data.code || "",
+            output: data.output || ""
+          }],
+          createdAt: Date.now()
+        };
+        await env.CODE_NEST_SHARE.put(id, JSON.stringify(notebook));
+        return Response.json({ id, url: url.origin + "/share/" + id }, { headers: cors });
+      } catch (error) {
+        return Response.json(
+          { error: "Invalid JSON", message: String(error?.message || error) },
+          { status: 400, headers: cors }
+        );
+      }
+    }
+
+    if (request.method === "GET" && url.pathname.startsWith("/share/")) {
+      const id = url.pathname.split("/")[2];
+      if (!id) return new Response("Share not found", { status: 404 });
+
+      const data = await env.CODE_NEST_SHARE.get(id, "json");
+      if (!data) return new Response("Share not found", { status: 404 });
+
+      const cells = Array.isArray(data.cells) ? data.cells : [{
+        type: "code",
+        source: data.code || "",
+        output: data.output || ""
+      }];
+
+      const cellHtml = cells.map((cell, index) => {
+        const type = cell.type === "markdown" ? "Markdown" : cell.type === "terminal" ? "Terminal" : "Code";
+        const output = cell.output ? '<div class="output"><div class="label">Output</div><pre>' + escapeHtml(cell.output) + '</pre></div>' : "";
+        return '<section class="cell"><div class="cell-head"><span class="badge">' + type + '</span><span class="number">#' + (index + 1) + '</span></div><pre class="source">' + escapeHtml(cell.source || "") + '</pre>' + output + '</section>';
+      }).join("");
+
+      const html = `<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#f2f4fb">
+<title>${escapeHtml(data.title || "Shared Notebook")} — Code Nest</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172033;background:#f2f4fb}
+*{box-sizing:border-box}body{margin:0;padding:32px 18px 60px}.page{width:min(960px,100%);margin:auto}
+.header{background:#fff;border:1px solid #e3e7f0;border-radius:22px;padding:26px 28px;margin-bottom:18px;box-shadow:0 12px 40px rgba(31,41,55,.08)}
+.brand{font-weight:800;font-size:14px;color:#7c3aed;margin-bottom:12px}h1{margin:0;font-size:clamp(26px,5vw,40px);letter-spacing:-.03em}.meta{margin-top:8px;color:#697386;font-size:14px}
+.cell{background:#fff;border:1px solid #e3e7f0;border-radius:18px;margin:14px 0;overflow:hidden;box-shadow:0 8px 30px rgba(31,41,55,.05)}
+.cell-head{display:flex;justify-content:space-between;align-items:center;padding:11px 16px;border-bottom:1px solid #edf0f5;color:#6b7280;font-size:13px}.badge{font-weight:700;color:#7c3aed}.number{opacity:.65}
+pre{margin:0;white-space:pre-wrap;word-break:break-word}.source{padding:20px;background:#10131a;color:#f3f4f6;font:14px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;min-height:40px}
+.output{border-top:1px solid #edf0f5}.output .label{padding:9px 16px;color:#6b7280;font-size:12px;font-weight:700}.output pre{padding:0 16px 16px;color:#303846;font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.footer{text-align:center;color:#8a93a5;font-size:12px;margin-top:24px}
+</style></head>
+<body><div class="page"><header class="header"><div class="brand">&lt;/&gt; Code Nest · Shared Notebook</div><h1>${escapeHtml(data.title || "Untitled Notebook")}</h1><div class="meta">${cells.length} cells · read-only shared view</div></header>
+<main>${cellHtml || '<div class="cell"><div class="source">このNotebookにはセルがありません。</div></div>'}</main>
+<div class="footer">Shared with Code Nest</div></div></body></html>`;
+
+      return new Response(html, { headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "public, max-age=300" } });
+    }
+
+    return Response.json({ ok: true, service: "Code Nest Backend" }, { headers: cors });
+  }
+};
+
+function escapeHtml(text) {
+  return String(text).replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
 }
-
-export default {async fetch(request,env){
-  const url=new URL(request.url);
-  if(request.method==="OPTIONS")return new Response(null,{headers:cors});
-  if(url.pathname==="/")return json({ok:true,service:"Code Nest Backend",share:"/share/:id"});
-  if(request.method==="POST"&&url.pathname==="/share"){
-    try{
-      const data=await request.json();
-      const payload={title:String(data.title||"Untitled Notebook").slice(0,200),cells:Array.isArray(data.cells)?data.cells.slice(0,200).map(c=>({type:["code","markdown","terminal"].includes(c?.type)?c.type:"code",source:String(c?.source||"").slice(0,50000),output:String(c?.output||"").slice(0,50000)})):[],createdAt:Date.now()};
-      if(!payload.cells.length)return json({error:"No cells"},400);
-      const id=crypto.randomUUID().replaceAll("-","").slice(0,8);
-      await env.CODE_NEST_SHARE.put(id,JSON.stringify(payload));
-      return json({id,url:`${url.origin}/share/${id}`});
-    }catch(e){return json({error:"Invalid request",detail:String(e)},400)}
-  }
-  if(request.method==="GET"&&url.pathname.startsWith("/share/")){
-    const id=url.pathname.split("/")[2]||"";
-    const value=await env.CODE_NEST_SHARE.get(id,"json");
-    if(!value)return new Response("Shared notebook not found",{status:404,headers:{"Content-Type":"text/plain;charset=utf-8",...cors}});
-    return new Response(sharePage(value,id),{headers:{"Content-Type":"text/html;charset=utf-8",...cors}});
-  }
-  return json({error:"Not Found"},404);
-}};
