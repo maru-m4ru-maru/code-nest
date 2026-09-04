@@ -346,9 +346,14 @@ import micropip
 # Do not ask micropip to install the unavailable server package.
 try:
     await micropip.install(
-        "scratchattach==${SCRATCHATTACH_VERSION}",
-        deps=False
-    )
+        "websocket-client",
+        deps=True
+    );
+
+await micropip.install(
+    "scratchattach==${SCRATCHATTACH_VERSION}",
+    deps=False
+)
 except TypeError:
     # Older micropip versions may not expose deps=.
     await micropip.install(
