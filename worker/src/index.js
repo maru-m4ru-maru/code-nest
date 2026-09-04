@@ -233,14 +233,14 @@ export default {
     if (request.method === "POST" && url.pathname === "/scratch-cloud") {
       try {
         const data = await request.json();
-        const projectId = String(data.project_id || "");
+        const projectId = String(data.project_id ?? "").trim();
         const username = String(data.username || "");
         const sessionId = String(data.session_id || "");
         const action = String(data.action || "");
         const variable = String(data.variable || "").replace(/^☁\s*/, "");
         const value = String(data.value ?? "");
 
-        if (!/^\d+$/.test(projectId)) return json({ error: "Invalid project_id" }, 400, cors);
+        if (!/^[0-9]{1,20}$/.test(projectId)) return json({ error: "Invalid project_id", received: projectId }, 400, cors);
         if (!username || !sessionId) return json({ error: "Authentication data is missing" }, 401, cors);
         if (action !== "set") return json({ error: "Unsupported cloud action" }, 400, cors);
         if (!variable || variable.length > 200) return json({ error: "Invalid cloud variable name" }, 400, cors);
