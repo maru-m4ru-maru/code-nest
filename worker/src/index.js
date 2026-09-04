@@ -251,7 +251,7 @@ export default {
             "Upgrade": "websocket",
             "Cookie": "scratchsessionsid=" + sessionId + ";",
             "Origin": "https://scratch.mit.edu",
-            "User-Agent": "Code-Nest/0.3.3"
+            "User-Agent": "Code-Nest/0.3.6"
           }
         });
 
@@ -733,7 +733,7 @@ Shared with Code Nest
             "Code Nest Backend",
 
           version:
-            "0.3",
+            "0.3.6",
 
           share:
             "/share/:id",
