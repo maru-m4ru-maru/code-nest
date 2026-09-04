@@ -1,11 +1,12 @@
 // Code Nest package manager bridge for the browser Pyodide runtime.
-// Supports: pip install <packages> and python -m pip install <packages>.
-// The actual installation runs inside the same Pyodide instance used by Python cells.
+// Browser-compatible subset of: pip install <packages>
+// and: python -m pip install <packages>.
+// The install happens inside the same Pyodide instance used by Python cells.
 
-const PIP_PROMPT_RE=/^(?:python\s+-m\s+pip|python3\s+-m\s+pip|pip)\s+install\s+(.+)$/i;
+const PIP_INSTALL_RE=/^(?:python\s+-m\s+pip|python3\s+-m\s+pip|py\s+-m\s+pip|pip)\s+install(?:\s+--[^\s]+)*\s+(.+)$/i;
 
 function parsePipInstall(input){
-  const match=input.trim().match(PIP_PROMPT_RE);
+  const match=input.trim().match(PIP_INSTALL_RE);
   if(!match)return null;
   const raw=match[1].trim();
   const parts=raw.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g)||[];
@@ -15,9 +16,14 @@ function parsePipInstall(input){
   return specs.length?specs:null;
 }
 
+function pipImportName(spec){
+  return spec.split(/[<>=!~\[]/,1)[0].trim().replace(/-/g,'_');
+}
+
 function formatPipCode(specs){
   const encoded=JSON.stringify(specs).replace(/</g,'\\u003c');
-  return `import micropip\nawait micropip.install(${encoded})\nprint("Successfully installed: ${specs.join(', ').replace(/"/g,'\\"')}")`;
+  const checks=JSON.stringify(specs.map(pipImportName));
+  return `import micropip\nawait micropip.install(${encoded})\nimport sys\nmods=${checks}\nloaded=[]\nfor name in mods:\n    try:\n        __import__(name)\n        loaded.append(name)\n    except Exception as exc:\n        print(f\"VERIFY WARNING: {name}: {exc}\")\nprint(\"Successfully installed: \" + \", \".join(${JSON.stringify(specs)}))\nprint(\"Import check: \" + (\", \".join(loaded) if loaded else \"no direct import verification\"))`;
 }
 
 async function runPipInstall(specs){
@@ -41,7 +47,7 @@ async function runPipInstall(specs){
 
   const deadline=Date.now()+120000;
   while(Date.now()<deadline){
-    await new Promise(resolve=>setTimeout(resolve,80));
+    await new Promise(resolve=>setTimeout(resolve,100));
     if(output && output.textContent && output.textContent!=='実行中…')break;
   }
 
@@ -51,17 +57,6 @@ async function runPipInstall(specs){
   if(count)count.textContent=document.querySelectorAll('.cell').length;
   if(result==='実行中…')return 'ERROR: pip install timed out after 120s';
   return result||`Successfully installed: ${specs.join(', ')}`;
-}
-
-function appendTerminalOutput(cell,result,command){
-  const output=cell.querySelector('.terminal-output');
-  if(!output)return;
-  let history=output.dataset.history||'';
-  const lines=[`$ ${command}`,...String(result).split(/\r?\n/)];
-  history+=(history?'\n':'')+lines.join('\n');
-  output.dataset.history=history;
-  output.textContent=history;
-  output.classList.add('visible');
 }
 
 function appendBashOutput(command,result){
@@ -87,6 +82,7 @@ function appendBashOutput(command,result){
 async function handlePipCommand(command,context){
   const specs=parsePipInstall(command);
   if(!specs)return false;
+
   if(context==='terminal'){
     const cell=document.querySelector('.terminal-input:focus')?.closest('.cell');
     if(!cell)return false;
@@ -152,3 +148,6 @@ document.addEventListener('submit',async event=>{
   if(input)input.value='';
   await handlePipCommand(command,'bash');
 },true);
+
+// Public helper for the UI and for quick smoke tests in DevTools.
+globalThis.codeNestPipInstall=async spec=>runPipInstall(Array.isArray(spec)?spec:[spec]);
