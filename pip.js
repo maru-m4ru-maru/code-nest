@@ -65,7 +65,8 @@ async function getCodeNestPyodide(){
   throw new Error('Code Nest: Pyodide runtime could not be captured');
 }
 
-const SCRATCHATTACH_VERSION='2.2.3';\nconst SCRATCHATTACH_RUNTIME_DEPS=['websocket-client','requests','bs4','typing-extensions','aiohttp','rich'];
+const SCRATCHATTACH_VERSION='2.2.3';
+const SCRATCHATTACH_RUNTIME_DEPS=['websocket-client','requests','bs4','typing-extensions','aiohttp','rich'];
 
 function isScratchattachSpec(spec){
   return /^scratchattach(?:[<>=!~\[]|$)/i.test(spec.trim());
