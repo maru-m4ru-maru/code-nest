@@ -1,5 +1,5 @@
 // Code Nest - pip.js
-// V0.3.2
+// V0.3.3
 // Pyodide / micropip / ScratchAttach browser compatibility.
 
 (() => {
@@ -482,16 +482,20 @@ def _cn_set_vars(self, var_value_dict, *, intelligent_waits=True, max_retries=2)
 
 def _cn_get_all_vars(self, *, recorder_initial_values=None, use_logs=False):
     response = requests.get(
-        "https://api.scratch.mit.edu/projects/" + str(self.project_id),
+        _CODE_NEST_WORKER_CLOUD_READ_ENDPOINT +
+        "?project_id=" +
+        urllib.parse.quote(str(self.project_id)),
         timeout=15
     )
     if response.status_code >= 400:
         raise RuntimeError(response.text)
-    variables = {}
-    for target in response.json().get("targets", []):
-        for raw in target.get("variables", {}).values():
-            if isinstance(raw, list) and len(raw) >= 3 and raw[2]:
-                variables[raw[0]] = raw[1]
+
+    data = response.json()
+    variables = data.get("variables", {})
+
+    if not isinstance(variables, dict):
+        return {}
+
     return variables
 
 def _cn_get_var(self, variable, *, recorder_initial_values=None, use_logs=False):
