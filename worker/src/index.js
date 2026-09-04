@@ -141,6 +141,51 @@ export default {
 
 
     // ----------------------------------------------------------
+    // Scratch Cloud write bridge
+    // ----------------------------------------------------------
+
+    if (request.method === "POST" && url.pathname === "/scratch-cloud") {
+      try {
+        const data = await request.json();
+        const projectId = String(data.project_id || "");
+        const username = String(data.username || "");
+        const sessionId = String(data.session_id || "");
+        const action = String(data.action || "");
+        const variable = String(data.variable || "").replace(/^☁\\s*/, "");
+        const value = String(data.value ?? "");
+
+        if (!/^\\d+$/.test(projectId)) return json({ error: "Invalid project_id" }, 400, cors);
+        if (!username || !sessionId) return json({ error: "Authentication data is missing" }, 401, cors);
+        if (action !== "set") return json({ error: "Unsupported cloud action" }, 400, cors);
+        if (!variable || variable.length > 200) return json({ error: "Invalid cloud variable name" }, 400, cors);
+        if (value.length > 256 || !/^-?\\d+(?:\\.\\d+)?$/.test(value)) return json({ error: "Invalid cloud value" }, 400, cors);
+
+        const upstream = await fetch("https://clouddata.scratch.mit.edu/", {
+          headers: {
+            "Upgrade": "websocket",
+            "Cookie": "scratchsessionsid=" + sessionId + ";",
+            "Origin": "https://scratch.mit.edu",
+            "User-Agent": "Code-Nest/0.3.3"
+          }
+        });
+
+        const ws = upstream.webSocket;
+        if (!ws) return json({ error: "Scratch cloud WebSocket was not accepted" }, 502, cors);
+        ws.accept();
+
+        ws.send(JSON.stringify({ method: "handshake", user: username, project_id: projectId }));
+        ws.send(JSON.stringify({ method: "set", name: "☁ " + variable, value, user: username, project_id: projectId }));
+
+        await new Promise(resolve => setTimeout(resolve, 200));
+        try { ws.close(1000, "Code Nest request complete"); } catch {}
+
+        return json({ ok: true, project_id: projectId, variable: "☁ " + variable, value }, 200, cors);
+      } catch (error) {
+        return json({ error: "Scratch cloud request failed", message: String(error?.message || error) }, 502, cors);
+      }
+    }
+
+    // ----------------------------------------------------------
     // Share notebook
     // ----------------------------------------------------------
 
