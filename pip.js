@@ -328,11 +328,11 @@ print("Browser compatibility mode enabled")
             setLoading(
                 true,
                 "ScratchAttachの依存関係を準備中…",
-                "Pyodide版 lz4 を読み込んでいます"
+                "Pyodide版の依存パッケージを読み込んでいます"
             );
 
             try {
-                await pyodide.loadPackage("lz4");
+                await pyodide.loadPackage(["lz4", "beautifulsoup4"]);
                 log("lz4 OK");
             } finally {
                 setLoading(false);
