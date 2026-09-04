@@ -9,20 +9,24 @@ The UI is designed like a small premium developer app while staying deployable o
 - 🐍 Python cells with Pyodide
 - 📝 Markdown cells with live preview
 - 🖥️ Browser Terminal / Bash-like shell
+- ⌁ Interactive Bash Console with command history and tab completion
 - ▶ Run one cell or run every Python cell
 - 💾 Automatic local saving
 - 🌙 Light / dark theme
-- ⌘K command palette
-- ⇧Enter / ⌘Enter run shortcuts
+- 🔎 Command search
 - ⇩ Export the notebook as JSON
 - 📱 Responsive mobile layout
 - 🧩 Local browser filesystem for Terminal cells
 
-## Terminal note
+## Bash Console note
 
-The Terminal in the current GitHub Pages build is a **browser-only Bash-like mini shell**, not a real Linux process. It provides a safe simulated filesystem and useful shell-style commands without requiring a server.
+The Bash Console in the current GitHub Pages build is a **browser-only Bash-like shell**, not a real Linux process. It shares the browser filesystem with Terminal cells and provides common shell commands without requiring a server.
 
 Supported commands include `help`, `pwd`, `ls`, `cd`, `mkdir`, `touch`, `cat`, `echo`, `rm`, `clear`, `uname`, `whoami`, `date`, and `python`.
+
+Use **↑ / ↓** to move through command history, **Tab** for basic completion, and **Ctrl+L** to clear the console.
+
+For a future real Linux Bash environment, Code Nest would need a server/container runtime. WebContainers are another browser-based option for Node.js and shell-like workloads, but they require cross-origin isolation headers such as COOP/COEP. See the WebContainers docs for deployment requirements.
 
 ## Python runtime
 
