@@ -341,9 +341,20 @@ print("Browser compatibility mode enabled")
             await pyodide.runPythonAsync(`
 import micropip
 
-await micropip.install(
-    "scratchattach==${SCRATCHATTACH_VERSION}"
-)
+# ScratchAttach lists SimpleWebSocketServer as a dependency,
+# but Code Nest provides a browser-only compatibility module above.
+# Do not ask micropip to install the unavailable server package.
+try:
+    await micropip.install(
+        "scratchattach==${SCRATCHATTACH_VERSION}",
+        deps=False
+    )
+except TypeError:
+    # Older micropip versions may not expose deps=.
+    await micropip.install(
+        "scratchattach==${SCRATCHATTACH_VERSION}",
+        keep_going=True
+    )
 
 print("Successfully installed: scratchattach ${SCRATCHATTACH_VERSION}")
 `);
