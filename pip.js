@@ -72,14 +72,46 @@ async function getCodeNestPyodide(){
   throw new Error('Code Nest: Pyodide runtime could not be captured');
 }
 
+const SCRATCHATTACH_BROWSER_INCOMPATIBLE=['browser_cookie3'];
+const SCRATCHATTACH_RUNTIME_DEPS=[
+  'websocket-client',
+  'requests',
+  'bs4',
+  'SimpleWebSocketServer',
+  'typing-extensions',
+  'aiohttp',
+  'rich'
+];
+
+function isScratchattachSpec(spec){
+  return /^scratchattach(?:[<>=!~\[]|$)/i.test(spec.trim());
+}
+
+async function installScratchattach(py,spec){
+  // scratchattach declares browser_cookie3 as a dependency for desktop-browser-cookie
+  // extraction. That dependency pulls native crypto packages that cannot be installed in
+  // the WebAssembly browser runtime. scratchattach itself handles the missing optional
+  // browser-cookie module at import time, so install the package without dependencies and
+  // provide the browser-compatible runtime dependencies explicitly.
+  await py.runPythonAsync(`
+import micropip
+await micropip.install(${JSON.stringify(spec)}, deps=False)
+await micropip.install(${JSON.stringify(SCRATCHATTACH_RUNTIME_DEPS)})
+`);
+}
+
 async function runPipInstall(specs){
   const py=await getCodeNestPyodide();
   await py.loadPackage('micropip');
   py.setStdout?.({batched:()=>{}});
 
-  const encoded=JSON.stringify(specs).replace(/</g,'\\u003c');
-  const importNames=JSON.stringify(specs.map(packageImportName));
-  const code=`
+  const normalSpecs=specs.filter(spec=>!isScratchattachSpec(spec));
+  const scratchSpecs=specs.filter(isScratchattachSpec);
+
+  if(normalSpecs.length){
+    const encoded=JSON.stringify(normalSpecs).replace(/</g,'\\u003c');
+    const importNames=JSON.stringify(normalSpecs.map(packageImportName));
+    const code=`
 import micropip
 await micropip.install(${encoded})
 mods=${importNames}
@@ -90,15 +122,33 @@ for name in mods:
         loaded.append(name)
     except Exception as exc:
         raise RuntimeError(f"Installed but import failed for {name}: {exc}") from exc
-print("Successfully installed: " + ", ".join(${JSON.stringify(specs)}))
+print("Successfully installed: " + ", ".join(${JSON.stringify(normalSpecs)}))
 print("Import check: " + ", ".join(loaded))
 `;
 
-  let captured='';
-  py.setStdout({batched:s=>{captured+=s+'\n'}});
-  py.setStderr({batched:s=>{captured+=s+'\n'}});
-  await py.runPythonAsync(code);
-  return captured.trimEnd()||`Successfully installed: ${specs.join(', ')}`;
+    let captured='';
+    py.setStdout({batched:s=>{captured+=s+'\n'}});
+    py.setStderr({batched:s=>{captured+=s+'\n'}});
+    await py.runPythonAsync(code);
+    if(captured.trim())captured=captured.trimEnd();
+  }
+
+  if(scratchSpecs.length){
+    let captured='';
+    py.setStdout({batched:s=>{captured+=s+'\n'}});
+    py.setStderr({batched:s=>{captured+=s+'\n'}});
+    for(const spec of scratchSpecs)await installScratchattach(py,spec);
+    await py.runPythonAsync(`
+import scratchattach
+print("Successfully installed: scratchattach (browser-compatible mode)")
+print("Import check: scratchattach " + getattr(scratchattach, "__version__", "loaded"))
+print("Note: browser_cookie3 is intentionally skipped in Code Nest because browser cookie extraction is not available from Pyodide/WebAssembly.")
+`);
+    if(captured.trim())return captured.trimEnd();
+    return 'Successfully installed: scratchattach (browser-compatible mode)\nImport check: scratchattach loaded\nNote: browser_cookie3 is intentionally skipped in Code Nest because browser cookie extraction is not available from Pyodide/WebAssembly.';
+  }
+
+  return `Successfully installed: ${normalSpecs.join(', ')}`;
 }
 
 function appendBashOutput(command,result,error=false){
