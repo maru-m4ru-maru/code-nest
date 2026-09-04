@@ -2,84 +2,27 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#f7f7f9"><meta name="description" content="Code Nest — browser notebook workspace">
+<meta name="theme-color" content="#f2f4fb"><meta name="description" content="Code Nest — browser notebook workspace">
 <title>Code Nest</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%23121822'/%3E%3Cpath d='M17 24l11 8-11 8M34 40h13' fill='none' stroke='%23fff' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='18' fill='%238b3dff'/%3E%3Cpath d='M17 24l11 8-11 8M34 40h13' fill='none' stroke='%23fff' stroke-width='5' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=Noto+Sans+JP:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style-premium.css">
 </head>
 <body>
 <div class="app-shell">
 <aside class="sidebar" id="sidebar">
-  <div class="sidebar-top">
-    <div class="brand"><div class="brand-mark">&lt;/&gt;</div><div><strong>Code Nest</strong><small>Notebook Studio</small></div></div>
-    <button class="square-btn" id="sidebarCollapse" title="サイドバーを閉じる">‹</button>
-  </div>
+  <div class="sidebar-top"><div class="brand"><div class="brand-mark">&lt;/&gt;</div><div><strong>Code Nest</strong><small>Notebook Studio</small></div></div><button class="square-btn" id="sidebarCollapse" title="サイドバーを閉じる">‹</button></div>
   <button class="new-btn" id="newNotebookBtn"><span>＋</span> 新しいNotebook</button>
-  <nav class="side-nav">
-    <button class="nav-item active"><span>◫</span> Notebook</button>
-    <button class="nav-item" id="focusSearch"><span>⌕</span> 検索</button>
-    <button class="nav-item" id="exportBtn"><span>⇩</span> 書き出す</button>
-  </nav>
-  <div class="side-section-title">ワークスペース</div>
-  <div class="workspace-card"><div class="avatar">CN</div><div><strong>Code Nest</strong><small>Local workspace</small></div><span class="live-dot"></span></div>
+  <nav class="side-nav"><button class="nav-item active"><span>◫</span> Notebook</button><button class="nav-item" id="focusSearch"><span>⌕</span> 検索</button><button class="nav-item" id="exportBtn"><span>⇩</span> 書き出す</button></nav>
+  <div class="side-section-title">ワークスペース</div><div class="workspace-card"><div class="avatar">CN</div><div><strong>Code Nest</strong><small>Local workspace</small></div><span class="live-dot"></span></div>
   <div class="sidebar-footer"><span>v0.2 preview</span><button id="resetBtn" class="text-btn">リセット</button></div>
 </aside>
-
 <div class="main-area">
-<header class="topbar">
-  <button class="mobile-menu" id="mobileMenu">☰</button>
-  <div class="breadcrumbs"><span class="crumb-muted">Workspace</span><span>/</span><strong id="crumbTitle">Welcome to Code Nest</strong></div>
-  <div class="top-actions">
-    <span class="save-state" id="saveState">保存済み</span>
-    <button class="icon-btn" id="searchBtn" title="検索">⌕</button>
-    <button class="icon-btn" id="themeBtn" title="テーマ切替">☾</button>
-    <button class="primary-btn" id="runAllBtn">▶ すべて実行</button>
-    <button class="avatar-btn" id="avatarBtn">CN</button>
-  </div>
-</header>
-
-<div class="toolbar">
-  <div class="toolbar-left">
-    <button class="tool-btn accent" id="addCodeBtn">＋ Code</button>
-    <button class="tool-btn" id="addMarkdownBtn">＋ Markdown</button>
-    <button class="tool-btn terminal-tool" id="addTerminalBtn">＋ Terminal</button>
-    <span class="divider"></span>
-    <button class="tool-btn ghost" id="clearBtn">出力を消去</button>
-  </div>
-  <div class="toolbar-right">
-    <span class="runtime-pill"><i></i><span id="runtimeStatus">ブラウザ実行環境</span></span>
-  </div>
-</div>
-
-<main class="content">
-  <section class="hero-row">
-    <div class="title-area">
-      <input id="titleInput" class="title-input" value="Welcome to Code Nest" aria-label="Notebook title">
-      <p>Python・Markdown・TerminalをひとつのNotebookで。変更はこのブラウザに自動保存されます。</p>
-    </div>
-    <div class="mini-stats"><span><b id="cellCount">0</b> cells</span><span><b id="storageState">Local</b> storage</span></div>
-  </section>
-
-  <section id="cells" class="cells" aria-label="Notebook cells"></section>
-
-  <div class="insert-zone">
-    <button id="bottomAddBtn" class="add-cell-btn"><span>＋</span> セルを追加</button>
-  </div>
-
-  <section class="welcome-card">
-    <div class="welcome-icon">✦</div>
-    <div><strong>Build something great.</strong><p>コードを書いて、実行して、考えたことをそのまま残そう。</p></div>
-    <button id="starterBtn" class="secondary-btn">サンプルを追加</button>
-  </section>
-</main>
-
+<header class="topbar"><button class="mobile-menu" id="mobileMenu">☰</button><div class="breadcrumbs"><span class="crumb-muted">Workspace</span><span>/</span><strong id="crumbTitle">Welcome to Code Nest</strong></div><div class="top-actions"><span class="save-state" id="saveState">保存済み</span><button class="icon-btn" id="searchBtn" title="検索">⌕</button><button class="icon-btn" id="themeBtn" title="テーマ切替">☾</button><button class="primary-btn" id="runAllBtn">▶ すべて実行</button><button class="avatar-btn">CN</button></div></header>
+<div class="toolbar"><div class="toolbar-left"><button class="tool-btn accent" id="addCodeBtn">＋ Code</button><button class="tool-btn" id="addMarkdownBtn">＋ Markdown</button><button class="tool-btn terminal-tool" id="addTerminalBtn">＋ Terminal</button><span class="divider"></span><button class="tool-btn ghost" id="clearBtn">出力を消去</button></div><div class="toolbar-right"><span class="runtime-pill"><i></i><span id="runtimeStatus">ブラウザ実行環境</span></span></div></div>
+<main class="content"><section class="hero-row"><div class="title-area"><input id="titleInput" class="title-input" value="Welcome to Code Nest" aria-label="Notebook title"><p>Python・Markdown・TerminalをひとつのNotebookで。変更はこのブラウザに自動保存されます。</p></div><div class="mini-stats"><span><b id="cellCount">0</b> cells</span><span><b id="storageState">Local</b> storage</span></div></section><section id="cells" class="cells" aria-label="Notebook cells"></section><div class="insert-zone"><button id="bottomAddBtn" class="add-cell-btn"><span>＋</span> セルを追加</button></div><section class="welcome-card"><div class="welcome-icon">✦</div><div><strong>Build something great.</strong><p>コードを書いて、実行して、考えたことをそのまま残そう。</p></div><button id="starterBtn" class="secondary-btn">サンプルを追加</button></section></main>
 <footer class="statusbar"><span>Code Nest <b>•</b> local-first</span><span>Python + Terminal workspace</span></footer>
-</div>
-</div>
-
+</div></div>
 <div class="modal-backdrop" id="commandModal" aria-hidden="true"><div class="command-modal"><div class="command-head"><span>⌕</span><input id="commandInput" placeholder="コマンドを検索…" autocomplete="off"><kbd>Esc</kbd></div><div class="command-list" id="commandList"></div><div class="command-foot">クリックして実行</div></div></div>
-<div id="toast" class="toast" role="status" aria-live="polite"></div>
-<script type="module" src="app.js"></script>
-</body></html>
+<div id="toast" class="toast" role="status" aria-live="polite"></div><script type="module" src="app.js"></script></body></html>
