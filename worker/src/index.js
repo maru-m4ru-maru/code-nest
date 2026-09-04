@@ -65,7 +65,8 @@ export default {
 
       const allowedHosts = new Set([
         "api.scratch.mit.edu",
-        "scratch.mit.edu"
+        "scratch.mit.edu",
+        "clouddata.scratch.mit.edu"
       ]);
 
       if (
