@@ -317,6 +317,26 @@ print("Browser compatibility mode enabled")
             // --------------------------------------------------------
             // Install scratchattach
             // --------------------------------------------------------
+            //
+            // scratchattach 2.2.3 declares lz4.  lz4 is a compiled
+            // package, so micropip cannot take its normal PyPI wheel
+            // in the browser.  Load the Pyodide-built package first.
+            // Pyodide exposes packages built for wasm32 via
+            // pyodide.loadPackage().
+            // --------------------------------------------------------
+
+            setLoading(
+                true,
+                "ScratchAttachの依存関係を準備中…",
+                "Pyodide版 lz4 を読み込んでいます"
+            );
+
+            try {
+                await pyodide.loadPackage("lz4");
+                log("lz4 OK");
+            } finally {
+                setLoading(false);
+            }
 
             await pyodide.runPythonAsync(`
 import micropip
