@@ -1,4 +1,4 @@
-// Code Nest Worker V0.3
+// Code Nest Worker V0.3.6
 // Share API + Scratch API CORS proxy
 
 export default {
@@ -143,6 +143,92 @@ export default {
     // ----------------------------------------------------------
     // Scratch Cloud write bridge
     // ----------------------------------------------------------
+
+    // ----------------------------------------------------------
+    // Scratch Cloud read bridge
+    // ----------------------------------------------------------
+    //
+    // GET /scratch-cloud?project_id=...
+    // Returns the latest values observed in Scratch Cloud logs.
+    // ----------------------------------------------------------
+
+    if (
+      request.method === "GET" &&
+      url.pathname === "/scratch-cloud"
+    ) {
+      const projectId = String(
+        url.searchParams.get("project_id") || ""
+      );
+
+      if (!/^\\d+$/.test(projectId)) {
+        return json(
+          { error: "Invalid project_id" },
+          400,
+          cors
+        );
+      }
+
+      try {
+        const upstream = await fetch(
+          "https://clouddata.scratch.mit.edu/logs?projectid=" +
+          encodeURIComponent(projectId) +
+          "&limit=100&offset=0",
+          {
+            method: "GET",
+            headers: {
+              "Accept": "application/json",
+              "User-Agent": "Code-Nest/0.3.6"
+            }
+          }
+        );
+
+        if (!upstream.ok) {
+          return json(
+            {
+              error: "Scratch cloud logs request failed",
+              status: upstream.status,
+              message: await upstream.text()
+            },
+            502,
+            cors
+          );
+        }
+
+        const logs = await upstream.json();
+        const vars = {};
+
+        if (Array.isArray(logs)) {
+          for (const item of logs) {
+            if (
+              item &&
+              typeof item.name === "string" &&
+              Object.prototype.hasOwnProperty.call(item, "value")
+            ) {
+              vars[item.name] = item.value;
+            }
+          }
+        }
+
+        return json(
+          {
+            ok: true,
+            project_id: projectId,
+            variables: vars
+          },
+          200,
+          cors
+        );
+      } catch (error) {
+        return json(
+          {
+            error: "Scratch cloud logs request failed",
+            message: String(error?.message || error)
+          },
+          502,
+          cors
+        );
+      }
+    }
 
     if (request.method === "POST" && url.pathname === "/scratch-cloud") {
       try {
