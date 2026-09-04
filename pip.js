@@ -430,6 +430,83 @@ print("Code Nest Scratch API bridge enabled")
 `);
 
             // --------------------------------------------------------
+            // Scratch Cloud browser bridge
+            // --------------------------------------------------------
+
+            await pyodide.runPythonAsync(`
+import requests
+from scratchattach.cloud.cloud import ScratchCloud
+
+_CODE_NEST_CLOUD_ENDPOINT = _CODE_NEST_WORKER + "/scratch-cloud"
+
+def _cn_cloud_request(cloud, variable, value):
+    session = getattr(cloud, "_session", None)
+    if session is None:
+        raise RuntimeError("No Scratch session is connected.")
+    session_id = getattr(session, "id", None)
+    if not session_id:
+        raise RuntimeError("Scratch session ID is unavailable.")
+    response = requests.post(
+        _CODE_NEST_CLOUD_ENDPOINT,
+        json={
+            "action": "set",
+            "project_id": str(cloud.project_id),
+            "username": str(session.username),
+            "session_id": str(session_id),
+            "variable": str(variable).removeprefix("☁ "),
+            "value": str(value)
+        },
+        timeout=15
+    )
+    if response.status_code >= 400:
+        raise RuntimeError(response.text)
+    return response.json()
+
+def _cn_connect(self):
+    self._assert_auth()
+    self.active_connection = True
+    return self
+
+def _cn_disconnect(self):
+    self.active_connection = False
+
+def _cn_set_var(self, variable, value, *, max_retries=2):
+    self._assert_auth()
+    self._assert_valid_value(value)
+    return _cn_cloud_request(self, variable, value)
+
+def _cn_set_vars(self, var_value_dict, *, intelligent_waits=True, max_retries=2):
+    for variable, value in var_value_dict.items():
+        _cn_set_var(self, variable, value, max_retries=max_retries)
+    return {"ok": True}
+
+def _cn_get_all_vars(self, *, recorder_initial_values=None, use_logs=False):
+    response = requests.get(
+        "https://api.scratch.mit.edu/projects/" + str(self.project_id),
+        timeout=15
+    )
+    if response.status_code >= 400:
+        raise RuntimeError(response.text)
+    variables = {}
+    for target in response.json().get("targets", []):
+        for raw in target.get("variables", {}).values():
+            if isinstance(raw, list) and len(raw) >= 3 and raw[2]:
+                variables[raw[0]] = raw[1]
+    return variables
+
+def _cn_get_var(self, variable, *, recorder_initial_values=None, use_logs=False):
+    return _cn_get_all_vars(self, recorder_initial_values=recorder_initial_values, use_logs=use_logs).get("☁ " + str(variable).removeprefix("☁ "))
+
+ScratchCloud.connect = _cn_connect
+ScratchCloud.disconnect = _cn_disconnect
+ScratchCloud.set_var = _cn_set_var
+ScratchCloud.set_vars = _cn_set_vars
+ScratchCloud.get_all_vars = _cn_get_all_vars
+ScratchCloud.get_var = _cn_get_var
+print("Code Nest Scratch Cloud browser bridge enabled")
+`);
+
+            // --------------------------------------------------------
             // Final import check
             // --------------------------------------------------------
 
