@@ -1,0 +1,24 @@
+name: Code Nest Bash
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "Bash command"
+        required: true
+        type: string
+
+jobs:
+  bash:
+    runs-on: ubuntu-latest
+    permissions: {}
+
+    steps:
+      - name: Run command
+        shell: bash
+        env:
+          COMMAND: ${{ inputs.command }}
+        run: |
+          set -o pipefail
+          echo "$ $COMMAND"
+          timeout 20s bash -c "$COMMAND"
