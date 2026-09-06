@@ -148,9 +148,9 @@
       // pip is provided by Code Nest's Pyodide/micropip bridge, not by
       // the shell runtime itself. Route pip install commands here so the
       // Bash console and Terminal cells use the same package environment.
-      const pipMatch = cmd.match(/^(?:pip|python\\s+-m\\s+pip|python3\\s+-m\\s+pip|py\\s+-m\\s+pip)\\s+install\\s+(.+)$/i);
+      const pipMatch = cmd.match(/^(?:pip|python\s+-m\s+pip|python3\s+-m\s+pip|py\s+-m\s+pip)\s+install\s+(.+)$/i);
       if (pipMatch && typeof window.codeNestPipInstall === "function") {
-        const result = await window.codeNestPipInstall(pipMatch[1].trim().split(/\\s+/));
+        const result = await window.codeNestPipInstall(pipMatch[1].trim().split(/\s+/));
         if (result) print(result);
         return;
       }
