@@ -324,10 +324,11 @@
           return listNames(target).join("  ");
         }
 
-        case "cd": {
+          case "cd": {
           const next = normalize(args[0] || "/");
           if (!isDir(next)) throw new Error("cd: " + (args[0] || "/") + ": No such file or directory");
           state.session.cwd = next;
+          this.persist();
           setPrompt();
           return "";
         }
@@ -347,6 +348,7 @@
             ensureDir(parentOf(name));
             if (!isFile(name)) state.session.files.set(normalize(name), "");
           }
+          this.persist();
           return "";
 
         case "mkdir": {
@@ -360,6 +362,7 @@
             }
             ensureDir(n);
           }
+          this.persist();
           return "";
         }
 
@@ -368,18 +371,21 @@
           const names = args.filter(x => !x.startsWith("-"));
           if (!names.length) throw new Error("rm: missing operand");
           for (const name of names) removePath(name, recursive);
+          this.persist();
           return "";
         }
 
         case "cp": {
           if (args.length < 2) throw new Error("cp: missing destination file operand");
           copyPath(args[0], args[1]);
+          this.persist();
           return "";
         }
 
         case "mv": {
           if (args.length < 2) throw new Error("mv: missing destination file operand");
           movePath(args[0], args[1]);
+          this.persist();
           return "";
         }
 
@@ -393,6 +399,16 @@
         case "py": {
           if (!args.length) {
             return "Python is provided by Pyodide. Run Python code directly in a .py file or use: python -c \"print(123)\"";
+          }
+
+          if (args[0] === "-m" && args[1] === "pip") {
+            const pipArgs = args.slice(2);
+            if (typeof window.codeNestPipInstall !== "function") {
+              throw new Error("pip bridge is not ready. Reload Code Nest and try again.");
+            }
+            if (pipArgs[0] === "install") return await window.codeNestPipInstall(pipArgs.slice(1));
+            if (pipArgs[0] === "list") return await runPython("import importlib.metadata\nfor d in sorted(importlib.metadata.distributions(), key=lambda x: x.metadata.get('Name','').lower()):\n print(f\"{d.metadata.get('Name','')} {d.version}\")");
+            throw new Error("python -m pip: unsupported command '" + (pipArgs[0] || "") + "'");
           }
 
           if (args[0] === "-c") {
