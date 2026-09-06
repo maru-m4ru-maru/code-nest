@@ -413,8 +413,7 @@
               throw new Error("pip bridge is not ready. Reload Code Nest and try again.");
             }
             if (pipArgs[0] === "install") return await window.codeNestPipInstall(pipArgs.slice(1));
-            if (pipArgs[0] === "list") return await runPython("import importlib.metadata\nfor d in sorted(importlib.metadata.distributions(), key=lambda x: x.metadata.get('Name','').lower()):\n print(f\"{d.metadata.get('Name','')} {d.version}\")");
-            throw new Error("python -m pip: unsupported command '" + (pipArgs[0] || "") + "'");
+            if (pipArgs[0] === "list") return "pip list: use Python package metadata from the Python environment.";throw new Error("python -m pip: unsupported command '" + (pipArgs[0] || "") + "'");
           }
 
           if (args[0] === "-c") {
@@ -527,70 +526,8 @@
   }
 
   function wire() {
-    const form = document.getElementById("bashForm");
-    const field = input();
-    const clearBtn = document.getElementById("bashClearBtn");
-    const closeBtn = document.getElementById("bashCloseBtn");
-
-    if (form && !form.dataset.bound) {
-      form.dataset.bound = "1";
-      form.addEventListener("submit", async event => {
-        event.preventDefault();
-        const value = field.value;
-        field.value = "";
-        await runCommand(value);
-        field.focus();
-      });
-    }
-
-    if (field && !field.dataset.bound) {
-      field.dataset.bound = "1";
-      field.addEventListener("keydown", event => {
-        if (event.key === "ArrowUp") {
-          event.preventDefault();
-          if (!state.history.length) return;
-          state.historyIndex = Math.min(state.historyIndex + 1, state.history.length - 1);
-          field.value = state.history[state.historyIndex];
-        } else if (event.key === "ArrowDown") {
-          event.preventDefault();
-          state.historyIndex = Math.max(state.historyIndex - 1, -1);
-          field.value = state.historyIndex < 0 ? "" : state.history[state.historyIndex];
-        } else if (event.key === "l" && event.ctrlKey) {
-          event.preventDefault();
-          clear();
-        } else if (event.key === "c" && event.ctrlKey) {
-          if (field.value) {
-            field.value = "";
-          } else {
-            cancelCurrentCommand();
-          }
-          event.preventDefault();
-        } else if (event.key === "Tab") {
-          const value = field.value;
-          const parts = value.split(/\\s+/);
-          const last = parts[parts.length - 1] || "";
-          const candidates = listNames(state.session.cwd).filter(x => x.startsWith(last));
-          if (candidates.length === 1) {
-            parts[parts.length - 1] = candidates[0];
-            field.value = parts.join(" ");
-          }
-          event.preventDefault();
-        }
-      });
-    }
-
-    if (clearBtn && !clearBtn.dataset.bound) {
-      clearBtn.dataset.bound = "1";
-      clearBtn.addEventListener("click", clear);
-    }
-
-    if (closeBtn && !closeBtn.dataset.bound) {
-      closeBtn.dataset.bound = "1";
-      closeBtn.addEventListener("click", closeConsole);
-    }
-
-    // The main Studio may recreate/replace modal contents. Keep the bridge
-    // available for it and avoid duplicate listeners through dataset.bound.
+    // app.js owns the Bash modal controls. Do not register competing
+    // submit/keydown/click handlers here.
     setPrompt();
   }
 
