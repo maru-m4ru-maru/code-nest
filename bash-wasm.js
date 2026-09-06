@@ -295,6 +295,12 @@
   }
 
   class BrowserShell {
+    persist() {
+      try {
+        localStorage.setItem("code-nest-fs-v02", JSON.stringify(Object.fromEntries(state.session.files)));
+      } catch (_) {}
+    }
+
     async exec(command) {
       const parsed = splitRedirection(command);
       const tokens = tokenize(parsed.command);
