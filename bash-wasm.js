@@ -168,63 +168,9 @@
   }
 
   function wire() {
-    const form = document.getElementById("bashForm");
-    const field = input();
-    const clearBtn = document.getElementById("bashClearBtn");
-    const closeBtn = document.getElementById("bashCloseBtn");
-
-    if (form && !form.dataset.bound) {
-      form.dataset.bound = "1";
-      form.addEventListener("submit", async event => {
-        event.preventDefault();
-        const value = field.value;
-        field.value = "";
-        await runCommand(value);
-        field.focus();
-      });
-    }
-
-    if (field && !field.dataset.bound) {
-      field.dataset.bound = "1";
-      field.addEventListener("keydown", event => {
-        if (event.key === "ArrowUp") {
-          event.preventDefault();
-          if (!state.history.length) return;
-          state.historyIndex = Math.min(
-            state.historyIndex + 1,
-            state.history.length - 1
-          );
-          field.value = state.history[state.historyIndex];
-        } else if (event.key === "ArrowDown") {
-          event.preventDefault();
-          state.historyIndex = Math.max(state.historyIndex - 1, -1);
-          field.value = state.historyIndex < 0
-            ? ""
-            : state.history[state.historyIndex];
-        } else if (event.key === "l" && event.ctrlKey) {
-          event.preventDefault();
-          clear();
-        }
-      });
-    }
-
-    if (clearBtn && !clearBtn.dataset.bound) {
-      clearBtn.dataset.bound = "1";
-      clearBtn.addEventListener("click", clear);
-    }
-
-    if (closeBtn && !closeBtn.dataset.bound) {
-      closeBtn.dataset.bound = "1";
-      closeBtn.addEventListener("click", () => {
-        const modal = document.getElementById("bashModal");
-        if (modal) {
-          modal.setAttribute("aria-hidden", "true");
-          // Let the shared modal controller manage visibility via the .open class.
-          // Do not set an inline display:none here, or reopening the console
-          // would be blocked by the inline style overriding .modal-backdrop.open.
-        }
-      });
-    }
+    // app.js is the single owner of the Bash modal controls.
+    // Keeping listeners here would execute every command twice.
+    setPrompt();
   }
 
   window.CodeNestBash = {
