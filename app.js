@@ -74,7 +74,7 @@ function bashAppend(command,result,error=false){
   const output=$('#bashOutput');const line=document.createElement('div');line.className='bash-line'+(error?' error':'');const p=document.createElement('span');p.className='prompt';p.textContent=`$${shell.cwd} $ `;const c=document.createElement('span');c.className='command';c.textContent=command;line.appendChild(p);line.appendChild(c);if(result){const r=document.createElement('div');r.className='result';r.textContent=result;line.appendChild(r)}output.appendChild(line);output.scrollTop=output.scrollHeight
 }
 function updateBashPrompt(){if($('#bashPrompt'))$('#bashPrompt').textContent=`coder@code-nest:${shell.cwd} $ `}
-function parsePipInstallCommand(command){const m=command.trim().match(/^(?:pip|python\\s+-m\\s+pip|python3\\s+-m\\s+pip|py\\s+-m\\s+pip)\\s+install\\s+(.+)$/i);return m?m[1].trim():null}
+function parsePipInstallCommand(command){const m=command.trim().match(/^(?:pip|python\s+-m\s+pip|python3\s+-m\s+pip|py\s+-m\s+pip)\s+install\s+(.+)$/i);return m?m[1].trim():null}
 async function submitBashCommand(command){
   command=command.trim();if(!command)return;
 
@@ -86,7 +86,7 @@ async function submitBashCommand(command){
     if(bashHistory[bashHistory.length-1]!==command) bashHistory.push(command);
     bashHistoryIndex=bashHistory.length;
     try {
-      const result = await globalThis.codeNestPipInstall(pipPackage.split(/\\s+/));
+      const result = await globalThis.codeNestPipInstall(pipPackage.split(/\s+/));
       bashAppend(command, result);
     } catch (e) {
       bashAppend(command, 'ERROR: ' + String(e && e.message || e), true);
