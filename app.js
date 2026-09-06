@@ -22,16 +22,43 @@ let realBash=null;let realBashLoading=null;
 async function loadRealBash(){
   if(realBash)return realBash;
   if(realBashLoading)return realBashLoading;
+
+  const outputEl=$('#bashOutput');
+  if(outputEl){
+    outputEl.innerHTML='<div class="bash-welcome">Code Nest Bash Console\\nBash WASMを起動しています…</div>';
+  }
+  if($('#runtimeStatus'))$('#runtimeStatus').textContent='Bash WASMを読み込み中…';
+
   realBashLoading=(async()=>{
     const mod=await import('https://esm.sh/@everruns/bashkit-wasm@0.17.1');
+    if(!mod || typeof mod.initBashkit!=='function' || typeof mod.Bash!=='function'){
+      throw new Error('Bash WASMモジュールを読み込めませんでした');
+    }
     await mod.initBashkit();
-    realBash=new mod.Bash();
+    realBash=new mod.Bash({
+      cwd:'/workspace',
+      maxCommands:10000,
+      maxLoopIterations:100000,
+      maxMemory:64*1024*1024
+    });
     if($('#runtimeStatus'))$('#runtimeStatus').textContent='Bash WASM ready';
+    if(outputEl){
+      outputEl.innerHTML='<div class="bash-welcome">Code Nest Bash Console\\nBash WASM ready. Type <b>help</b> to begin.</div>';
+    }
     return realBash;
   })();
-  try{return await realBashLoading}catch(e){
+
+  try{
+    return await Promise.race([
+      realBashLoading,
+      new Promise((_,reject)=>setTimeout(()=>reject(new Error('Bash WASMの読み込みが15秒でタイムアウトしました。ネットワーク/CDNを確認してください。')),15000))
+    ]);
+  }catch(e){
     realBashLoading=null;
-    if($('#runtimeStatus'))$('#runtimeStatus').textContent='Bash fallback';
+    if($('#runtimeStatus'))$('#runtimeStatus').textContent='Bash WASM failed';
+    if(outputEl){
+      outputEl.innerHTML='<div class="bash-welcome">Code Nest Bash Console</div><div class="bash-line error">'+String(e&&e.message||e)+'</div><div class="bash-line">ブラウザシェルへフォールバックします。</div>';
+    }
     throw e;
   }
 }
@@ -82,7 +109,7 @@ async function submitBashCommand(command){
   else{bashAppend(command,result,typeof result==='string'&&result.startsWith('bash:'))}
   saveFs();scheduleSave();updateBashPrompt()
 }
-$('#openBashBtn').onclick=async()=>{openModal('#bashModal');updateBashPrompt();setTimeout(()=>$('#bashInput').focus(),30);if(!realBash&&!realBashLoading){try{await loadRealBash()}catch(_){}}};
+$('#openBashBtn').onclick=()=>{openModal('#bashModal');updateBashPrompt();setTimeout(()=>$('#bashInput').focus(),30);if(!realBash&&!realBashLoading){loadRealBash().catch(()=>{});}};
 $('#bashCloseBtn').onclick=()=>closeModal('#bashModal');
 $('#bashClearBtn').onclick=()=>{$('#bashOutput').innerHTML='';bashHistoryIndex=bashHistory.length;$('#bashInput').focus()};
 $('#bashForm').onsubmit=async e=>{e.preventDefault();const input=$('#bashInput');const value=input.value;input.value='';await submitBashCommand(value)};
