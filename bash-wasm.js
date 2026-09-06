@@ -219,7 +219,9 @@
         const modal = document.getElementById("bashModal");
         if (modal) {
           modal.setAttribute("aria-hidden", "true");
-          modal.style.display = "none";
+          // Let the shared modal controller manage visibility via the .open class.
+          // Do not set an inline display:none here, or reopening the console
+          // would be blocked by the inline style overriding .modal-backdrop.open.
         }
       });
     }
