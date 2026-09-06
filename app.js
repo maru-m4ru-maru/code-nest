@@ -2,9 +2,67 @@ const NOTEBOOK_KEY='code-nest-v02';const FS_KEY='code-nest-fs-v02';let pyodide=n
 function clearOutputs(){for(const o of $$('.output,.terminal-output,.markdown-preview')){o.textContent='';o.innerHTML='';o.className=o.classList.contains('terminal-output')?'terminal-output':'output'}scheduleSave();showToast('出力を消去しました')}function openModal(id){$(id).classList.add('open');$(id).setAttribute('aria-hidden','false')}function closeModal(id){$(id).classList.remove('open');$(id).setAttribute('aria-hidden','true')}function commandItems(){return[['＋ Codeセルを追加',()=>{addCell('code');scheduleSave()},'Code'],['＋ Markdownセルを追加',()=>{addCell('markdown');scheduleSave()},'Markdown'],['＋ Terminalセルを追加',()=>{addCell('terminal');scheduleSave()},'Terminal'],['▶ すべて実行',runAll,'Run'],['出力を消去',clearOutputs,'Clear'],['☾ テーマ切替',toggleTheme,'Theme'],['⇩ Notebookを書き出す',exportNotebook,'Export']]}function renderCommands(filter=''){const list=$('#commandList');list.innerHTML='';const items=commandItems().filter(x=>x[0].toLowerCase().includes(filter.toLowerCase()));items.forEach((item,i)=>{const row=document.createElement('div');row.className='command-item'+(i===0?' selected':'');row.innerHTML=`<span>${item[0]}</span><small>${item[2]}</small>`;row.onclick=()=>{item[1]();closeModal('#commandModal')};list.appendChild(row)})}function openCommand(){openModal('#commandModal');$('#commandInput').value='';renderCommands();setTimeout(()=>$('#commandInput').focus(),30)}function toggleTheme(){document.body.classList.toggle('dark');localStorage.setItem('code-nest-theme',document.body.classList.contains('dark')?'dark':'light');$('#themeBtn').textContent=document.body.classList.contains('dark')?'☀':'☾'}function exportNotebook(){const blob=new Blob([JSON.stringify(snapshot(),null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=(titleInput.value||'code-nest')+'.json';a.click();URL.revokeObjectURL(a.href);showToast('Notebookを書き出しました')}function newNotebook(){if(!confirm('現在のNotebookをリセットして新しく始めますか？'))return;localStorage.removeItem(NOTEBOOK_KEY);cellsEl.innerHTML='';titleInput.value='Untitled Notebook';addCell('code');updateStats();save();showToast('新しいNotebookを作成しました')}function showToast(s){toastEl.textContent=s;toastEl.classList.add('show');clearTimeout(showToast.t);showToast.t=setTimeout(()=>toastEl.classList.remove('show'),1500)}$('#addCodeBtn').onclick=()=>{addCell('code');scheduleSave()};$('#addMarkdownBtn').onclick=()=>{addCell('markdown');scheduleSave()};$('#addTerminalBtn').onclick=()=>{addCell('terminal');scheduleSave()};$('#bottomAddBtn').onclick=()=>{addCell('code');scheduleSave()};$('#runAllBtn').onclick=runAll;$('#clearBtn').onclick=clearOutputs;$('#themeBtn').onclick=toggleTheme;if($('#previewClose'))$('#previewClose').onclick=closePreview;$('#searchBtn').onclick=openCommand;$('#focusSearch').onclick=openCommand;$('#newNotebookBtn').onclick=newNotebook;$('#resetBtn').onclick=newNotebook;$('#exportBtn').onclick=exportNotebook;$('#mobileMenu').onclick=()=>$('#sidebar').classList.toggle('open');$('#sidebarCollapse').onclick=()=>$('#sidebar').classList.toggle('open');$('#starterBtn').onclick=()=>{addCell('code','numbers=[1,2,3,4,5]\nprint("sum =", sum(numbers))');addCell('markdown','# My notes\n**Code Nest**で実験しよう。');scheduleSave();showToast('サンプルを追加しました')};$('#commandInput').oninput=e=>renderCommands(e.target.value);titleInput.addEventListener('input',scheduleSave);document.addEventListener('click',e=>{const close=e.target.closest('[data-close]');if(close)closeModal('#'+close.dataset.close);if(e.target.classList.contains('modal-backdrop'))e.target.classList.remove('open')});if(localStorage.getItem('code-nest-theme')==='dark'){document.body.classList.add('dark');$('#themeBtn').textContent='☀'}titleInput.value=state.title;state.cells.forEach(c=>addCell(c.type,c.source,c.output));if(!state.cells.length)addCell('code');updateStats();
 
 // Standalone interactive Bash console. It reuses the same browser-only shell as Terminal cells.
-const bashHistory=[];let bashHistoryIndex=-1;let bashCompletionBase='';let bashCompletionIndex=0;const bashCommands=['help','pwd','ls','cd','mkdir','touch','cat','echo','rm','clear','uname','whoami','date','python'];
-function bashAppend(command,result,error=false){const output=$('#bashOutput');const line=document.createElement('div');line.className='bash-line'+(error?' error':'');const p=document.createElement('span');p.className='prompt';p.textContent=`${shell.cwd} $ `;const c=document.createElement('span');c.className='command';c.textContent=command;line.appendChild(p);line.appendChild(c);if(result){const r=document.createElement('div');r.className='result';r.textContent=result;line.appendChild(r)}output.appendChild(line);output.scrollTop=output.scrollHeight}
-function updateBashPrompt(){if($('#bashPrompt'))$('#bashPrompt').textContent=`coder@code-nest:${shell.cwd} $`}
-function parsePipInstallCommand(command){const m=command.trim().match(/^(?:pip|python\s+-m\s+pip|python3\s+-m\s+pip|py\s+-m\s+pip)\s+install\s+(.+)$/i);return m?m[1].trim():null}
-async function submitBashCommand(command){command=command.trim();if(!command)return;if(bashHistory[bashHistory.length-1]!==command)bashHistory.push(command);bashHistoryIndex=bashHistory.length;let result;const pipPackage=parsePipInstallCommand(command);if(pipPackage&&typeof globalThis.codeNestPipInstall==='function'){try{result=await globalThis.codeNestPipInstall(pipPackage.split(/\\s+/));}catch(e){result='ERROR: '+String(e)}}else{result=await executeCommand(command)}if(result==='__CLEAR__'){$('#bashOutput').innerHTML='<div class="bash-welcome">Code Nest Bash Console\\nType <b>help</b> to see available commands.</div>'}else{bashAppend(command,result,typeof result==='string'&&result.startsWith('bash:'))}saveFs();scheduleSave();updateBashPrompt()}
-$('#openBashBtn').onclick=()=>{openModal('#bashModal');updateBashPrompt();setTimeout(()=>$('#bashInput').focus(),30)};$('#bashCloseBtn').onclick=()=>closeModal('#bashModal');$('#bashClearBtn').onclick=()=>{$('#bashOutput').innerHTML='';bashHistoryIndex=bashHistory.length;$('#bashInput').focus()};$('#bashForm').onsubmit=async e=>{e.preventDefault();const input=$('#bashInput');const value=input.value;input.value='';await submitBashCommand(value)};$('#bashInput').addEventListener('keydown',e=>{if(e.key==='ArrowUp'){e.preventDefault();if(!bashHistory.length)return;bashHistoryIndex=Math.max(0,bashHistoryIndex-1);e.currentTarget.value=bashHistory[bashHistoryIndex]||''}else if(e.key==='ArrowDown'){e.preventDefault();if(!bashHistory.length)return;bashHistoryIndex=Math.min(bashHistory.length,bashHistoryIndex+1);e.currentTarget.value=bashHistory[bashHistoryIndex]||''}else if(e.key==='Tab'){e.preventDefault();const input=e.currentTarget;const text=input.value;const parts=text.trimStart().split(/\s+/);const prefix=parts.length===1?parts[0]:(parts[parts.length-1]||'');const candidates=[...new Set([...bashCommands,...children(shell.cwd)])].filter(x=>x.startsWith(prefix));if(candidates.length===1){input.value=parts.length===1?candidates[0]:`${parts.slice(0,-1).join(' ')} ${candidates[0]}`}else if(candidates.length>1){if(bashCompletionBase===prefix)bashCompletionIndex=(bashCompletionIndex+1)%candidates.length;else{bashCompletionBase=prefix;bashCompletionIndex=0}input.value=parts.length===1?candidates[bashCompletionIndex]:`${parts.slice(0,-1).join(' ')} ${candidates[bashCompletionIndex]}`}}else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='l'){e.preventDefault();$('#bashOutput').innerHTML='';}});document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal('#bashModal')});
+const bashHistory=[];let bashHistoryIndex=-1;let bashCompletionBase='';let bashCompletionIndex=0;
+const bashCommands=['help','pwd','ls','cd','mkdir','touch','cat','echo','rm','clear','uname','whoami','date','python','pip','grep','sed','awk','jq','find','sort','uniq','wc','head','tail','tr','cut','paste'];
+let realBash=null;let realBashLoading=null;
+
+async function loadRealBash(){
+  if(realBash)return realBash;
+  if(realBashLoading)return realBashLoading;
+  realBashLoading=(async()=>{
+    const mod=await import('https://esm.sh/@everruns/bashkit-wasm@0.17.1');
+    await mod.initBashkit();
+    realBash=new mod.Bash();
+    if($('#runtimeStatus'))$('#runtimeStatus').textContent='Bash WASM ready';
+    return realBash;
+  })();
+  try{return await realBashLoading}catch(e){
+    realBashLoading=null;
+    if($('#runtimeStatus'))$('#runtimeStatus').textContent='Bash fallback';
+    throw e;
+  }
+}
+
+async function submitRealBash(command){
+  const bash=await loadRealBash();
+  const result=bash.executeSync(command);
+  const text=[result.stdout||'',result.stderr||''].filter(Boolean).join('');
+  return text.trimEnd()||'(終了コード '+result.exitCode+')';
+}
+
+function bashAppend(command,result,error=false){
+  const output=$('#bashOutput');const line=document.createElement('div');line.className='bash-line'+(error?' error':'');const p=document.createElement('span');p.className='prompt';p.textContent=`$${shell.cwd} $ `;const c=document.createElement('span');c.className='command';c.textContent=command;line.appendChild(p);line.appendChild(c);if(result){const r=document.createElement('div');r.className='result';r.textContent=result;line.appendChild(r)}output.appendChild(line);output.scrollTop=output.scrollHeight
+}
+function updateBashPrompt(){if($('#bashPrompt'))$('#bashPrompt').textContent=`coder@code-nest:${shell.cwd} $ `}
+function parsePipInstallCommand(command){const m=command.trim().match(/^(?:pip|python\\s+-m\\s+pip|python3\\s+-m\\s+pip|py\\s+-m\\s+pip)\\s+install\\s+(.+)$/i);return m?m[1].trim():null}
+async function submitBashCommand(command){
+  command=command.trim();if(!command)return;
+  if(bashHistory[bashHistory.length-1]!==command)bashHistory.push(command);
+  bashHistoryIndex=bashHistory.length;
+  let result;
+  try{
+    result=await submitRealBash(command);
+  }catch(e){
+    // Keep Code Nest usable if the WASM package cannot load.
+    const pipPackage=parsePipInstallCommand(command);
+    if(pipPackage&&typeof globalThis.codeNestPipInstall==='function'){
+      try{result=await globalThis.codeNestPipInstall(pipPackage.split(/\\s+/));}catch(err){result='ERROR: '+String(err)}
+    }else{
+      result=await executeCommand(command);
+    }
+  }
+  if(result==='__CLEAR__'){$('#bashOutput').innerHTML='<div class="bash-welcome">Code Nest Bash Console\\nType <b>help</b> to see available commands.</div>'}
+  else{bashAppend(command,result,typeof result==='string'&&result.startsWith('bash:'))}
+  saveFs();scheduleSave();updateBashPrompt()
+}
+$('#openBashBtn').onclick=async()=>{openModal('#bashModal');updateBashPrompt();setTimeout(()=>$('#bashInput').focus(),30);if(!realBash&&!realBashLoading){try{await loadRealBash()}catch(_){}}};
+$('#bashCloseBtn').onclick=()=>closeModal('#bashModal');
+$('#bashClearBtn').onclick=()=>{$('#bashOutput').innerHTML='';bashHistoryIndex=bashHistory.length;$('#bashInput').focus()};
+$('#bashForm').onsubmit=async e=>{e.preventDefault();const input=$('#bashInput');const value=input.value;input.value='';await submitBashCommand(value)};
+$('#bashInput').addEventListener('keydown',e=>{
+  if(e.key==='ArrowUp'){e.preventDefault();if(!bashHistory.length)return;bashHistoryIndex=Math.max(0,bashHistoryIndex-1);e.currentTarget.value=bashHistory[bashHistoryIndex]||''}
+  else if(e.key==='ArrowDown'){e.preventDefault();if(!bashHistory.length)return;bashHistoryIndex=Math.min(bashHistory.length,bashHistoryIndex+1);e.currentTarget.value=bashHistory[bashHistoryIndex]||''}
+  else if(e.key==='Tab'){e.preventDefault();const input=e.currentTarget;const text=input.value;const parts=text.trimStart().split(/\\s+/);const prefix=parts.length===1?parts[0]:(parts[parts.length-1]||'');const candidates=[...new Set([...bashCommands,...children(shell.cwd)])].filter(x=>x.startsWith(prefix));if(candidates.length===1){input.value=parts.length===1?candidates[0]:`${parts.slice(0,-1).join(' ')} ${candidates[0]}`}else if(candidates.length>1){if(bashCompletionBase===prefix)bashCompletionIndex=(bashCompletionIndex+1)%candidates.length;else{bashCompletionBase=prefix;bashCompletionIndex=0}input.value=parts.length===1?candidates[bashCompletionIndex]:`${parts.slice(0,-1).join(' ')} ${candidates[bashCompletionIndex]}`}}
+  else if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='l'){e.preventDefault();$('#bashOutput').innerHTML=''}
+});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeModal('#bashModal')});
