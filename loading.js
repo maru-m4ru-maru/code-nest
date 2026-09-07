@@ -1,16 +1,17 @@
-// Code Nest runtime loader V0.3.11
+// Code Nest runtime loader V0.3.12
 (() => {
   'use strict';
 
-  // Parser-blocking load so the preview diagnostics click handler is installed
-  // before app.js attaches its own cell click handler.
   if (!document.querySelector('script[data-code-nest-runtime-fix]')) {
     document.write('<script src="runtime-fix.js?v=11" data-code-nest-runtime-fix><\\/script>');
+  }
+  if (!document.querySelector('script[data-code-nest-preview-ui-fix]')) {
+    document.write('<script src="preview-ui-fix.js?v=12" data-code-nest-preview-ui-fix><\\/script>');
   }
 
   function setVersion() {
     document.querySelectorAll('.sidebar-footer span').forEach((el) => {
-      if (/^V0\.3\.\d+$/i.test(el.textContent.trim())) el.textContent = 'V0.3.11';
+      if (/^V0\.3\.\d+$/i.test(el.textContent.trim())) el.textContent = 'V0.3.12';
     });
   }
 
@@ -35,5 +36,5 @@
   new MutationObserver(() => hardenPreviewFrame())
     .observe(document.documentElement, { childList: true, subtree: true });
 
-  console.log('[Code Nest Preview] loader V0.3.11 ready');
+  console.log('[Code Nest Preview] loader V0.3.12 ready');
 })();
