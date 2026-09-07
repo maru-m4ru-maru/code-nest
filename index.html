@@ -15,7 +15,7 @@
 </head>
 <body>
 <header class="wrap nav">
-<a class="brand" href="./"><svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><path d="M31 10c-9 0-9 6-9 6v8h15v3H19c-9 0-9 8-9 8s0 9 9 9h6v-6h-7c-3 0-3-4 0-4h20c4 0 7-3 7-7V19c0-5-5-9-14-9Z" fill="#16b9ff"/><path d="M37 54c9 0 9-6 9-6v-8H31v-3h18c9 0 9-8 9-8s0-9-9-9h-6v6h7c3 0 3 4 0 4H30c-4 0-7-3-7 7v8c0 5 5 9 14 9Z" fill="#078bd7"/></svg><span>Code Nest<small>Notebook Studio</small></span></a>
+<a class="brand" href="./"><svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><path d="M31 10c-9 0-9 6-9 6v8h15v3H19c-9 0-9 8-9 8s0 9 9 9h6v-6h-7c-3 0-3-4 0-4h20c4 0 7-3 7-7V19c0-5-5-9-14-9Z" fill="#16b9ff"/><path d="M37 54c9 0 9-6 9-6v-8H31v-3h18c9 0 9-8 9-8s0 9-9 9h-6v6h7c3 0 3 4 0 4H30c-4 0-7 3-7 7v8c0 5 5 9 14 9Z" fill="#078bd7"/></svg><span>Code Nest<small>Notebook Studio</small></span></a>
 <nav class="links"><a href="#features">Features</a><a href="#works">できること</a><a class="navbtn" href="./studio.html">Studioを開く</a></nav>
 </header>
 <main>
@@ -33,10 +33,61 @@
 <article class="feature"><b>03</b><h3>Code Preview</h3><p>HTML作品をその場でプレビュー。編集から確認までスムーズに。</p></article>
 <article class="feature"><b>04</b><h3>Share</h3><p>コードと完成したプレビューを分けてURLで共有できます。</p></article>
 </div></section>
-<section id="works" class="wrap section"><div class="head"><div class="kicker">Build anything</div><h2>アイデアは無限です！</h2><p>「プログラムを書く場所」から、「作品を作る場所」へ！</p></div><div class="build"><div class="card"><h3>Webからゲームまで。</h3><p>小さな実験から本格的な作品まで、コードで自由に形にできます。</p><div class="tags"><span class="tag">プログラミング</span><span class="tag">Web</span><span class="tag">ゲーム</span><span class="tag">アプリ</span><span class="tag">ツール</span><span class="tag">HTML</span><span class="tag">CSS</span><span class="tag">JavaScript</span><span class="tag">Python</span></div></div><div class="terminal"><b>$</b> code-nest init project<br><b>$</b> python main.py<br>Hello from Code Nest.<br><b>$</b> pip install scratchattach<br>Loading package metadata...<br><span style="color:#6e8490">Browser runtime ready.</span></div></div></section>
-<section class="wrap section"><div class="promise-box"><div class="promise-icon">!</div><div><strong>実装状況について</strong><p>Code Nestの機能は開発中のものを含みます。特にブラウザ内の実行環境は、通常のOSやLinuxサーバーとは異なる制約があります。</p></div></div></section>
-<section class="wrap section"><div class="cta"><h2>コードを書く場所を、もっと自由に。</h2><p>ブラウザを開けば、すぐに制作を始められます。</p><a class="btn primary" href="./studio.html">Studioを開く</a></div></section>
+<section id="works" class="wrap section"><div class="head"><div class="kicker">Build anything</div><h2>アイデアは無限です！</h2><p>「プログラムを書く場所」から、「作品を作る場所」へ！</p></div><div class="build"><div class="card"><h3>Webからゲームまで。</h3><p>小さな実験から本格的な作品まで、コードで自由に形にできます。</p><div class="tags"><span class="tag">プログラミング</span><span class="tag">Web</span><span class="tag">ゲーム</span><span class="tag">アプリ</span><span class="tag">ツール</span><span class="tag">HTML</span><span class="tag">CSS</span><span class="tag">JavaScript</span><span class="tag">Python</span></div></div><div class="terminal"><b>const</b> idea = "something great";<br><br><b>while</b> (idea) {<br>&nbsp;&nbsp;build(idea);<br>&nbsp;&nbsp;preview();<br>&nbsp;&nbsp;share();<br>}</div></div></section>
+<section class="wrap section" id="sample-tetris">
+  <div class="head">
+    <div class="kicker">Sample Project</div>
+    <h2>Code Nestで作ったテトリス</h2>
+    <p>HTML・CSS・JavaScriptだけで動くサンプルゲームです。コードもプレビューも、別々のURLから開けます。</p>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;gap:18px;align-items:center;flex-wrap:wrap">
+      <div>
+        <h3 style="margin:0 0 6px">Code Nest Tetris</h3>
+        <p style="margin:0;color:var(--muted);font-size:12px">シンプルな見た目、ちゃんと遊べる。回転・ライン消去・レベル機能を搭載！</p>
+      </div>
+      <div class="tags">
+        <span class="tag">Game</span>
+        <span class="tag">HTML</span>
+        <span class="tag">CSS</span>
+        <span class="tag">JavaScript</span>
+      </div>
+    </div>
+    <div class="actions" style="justify-content:flex-start;margin-bottom:0">
+      <a class="btn primary" href="https://code-nest-worker.maru-0727.workers.dev/share/6222cdb0?view=preview" target="_blank" rel="noopener">プレビューを見る</a>
+      <a class="btn secondary" href="https://code-nest-worker.maru-0727.workers.dev/share/6222cdb0?view=code" target="_blank" rel="noopener">コードを見る</a>
+    </div>
+  </div>
+</section>
+
+<section class="wrap section" id="sample-homepage">
+  <div class="head">
+    <div class="kicker">Sample Project</div>
+    <h2>Code Nestで作ったホームページ</h2>
+    <p>Code Nest自身をCode Nestで作ったサンプルです。コードと完成したプレビューを別々に開けます。</p>
+  </div>
+  <div class="card">
+    <div style="display:flex;justify-content:space-between;gap:18px;align-items:center;flex-wrap:wrap">
+      <div>
+        <h3 style="margin:0 0 6px">Code Nest Homepage</h3>
+        <p style="margin:0;color:var(--muted);font-size:12px">このページそのものを、Code Nestの共有機能から公開しています。</p>
+      </div>
+      <div class="tags">
+        <span class="tag">Web</span>
+        <span class="tag">HTML</span>
+        <span class="tag">CSS</span>
+      </div>
+    </div>
+    <div class="actions" style="justify-content:flex-start;margin-bottom:0">
+      <a class="btn primary" href="https://code-nest-worker.maru-0727.workers.dev/share/65e07559?view=preview" target="_blank" rel="noopener">プレビューを見る</a>
+      <a class="btn secondary" href="https://code-nest-worker.maru-0727.workers.dev/share/65e07559?view=code" target="_blank" rel="noopener">コードを見る</a>
+    </div>
+  </div>
+</section>
+
+<section class="wrap section promise"><div class="promise-box"><div class="promise-icon">!</div><div><strong>Code Nestからのおやくそく</strong><p>Code Nestの共有機能は、現在Cloudflare Workersの無料プランで運用しています。共有を短時間に大量に行うなど、サーバーへ負荷をかける使い方はやめてね。1日の上限に達すると、Code Nestを使っているほかの利用者にも影響する可能性があります。みんなで気持ちよく使えるように、必要なときだけ共有してください🙏</p></div></div></section>
+<section class="wrap section"><div class="cta"><h2>今すぐ始める！</h2><p>Code Nest Studioを開いて、最初のNotebookを始めよう。</p><a class="btn primary" href="./studio.html">今すぐ始める！</a></div></section>
 </main>
-<footer class="wrap footer"><strong>Code Nest 🪺</strong><span>Local-first browser coding workspace</span></footer>
+<footer class="wrap footer"><span><strong>Code Nest</strong> · Notebook Studio</span><span>Code. Build. Share.</span></footer>
 </body>
 </html>
