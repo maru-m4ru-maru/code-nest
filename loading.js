@@ -157,5 +157,21 @@
     }
   }, true);
 
+  // Load the project-preview override after app.js so it can replace the
+  // preview/run handlers without rewriting the large minified app bundle.
+  function loadPreviewFixes() {
+    if (document.querySelector('script[data-code-nest-preview-fixes]')) return;
+    const script = document.createElement("script");
+    script.src = "preview-fixes.js";
+    script.dataset.codeNestPreviewFixes = "true";
+    document.body.appendChild(script);
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => setTimeout(loadPreviewFixes, 0), { once: true });
+  } else {
+    setTimeout(loadPreviewFixes, 0);
+  }
+
   console.log("[Code Nest] loading guard ready");
 })();
