@@ -1,4 +1,4 @@
-// Code Nest loading guard V0.3.2
+// Code Nest loading guard V0.3.3
 (() => {
   "use strict";
 
@@ -20,49 +20,14 @@
 
     const style = document.createElement("style");
     style.textContent = `
-      #codeNestLoading {
-        position: fixed;
-        inset: 0;
-        z-index: 99999;
-        display: none;
-        align-items: center;
-        justify-content: center;
-        background: rgba(9,12,18,.34);
-        backdrop-filter: blur(4px);
-        pointer-events: all;
-      }
-      #codeNestLoading .cn-loading-card {
-        min-width: 220px;
-        max-width: calc(100vw - 40px);
-        padding: 22px 24px;
-        border: 1px solid rgba(127,135,155,.22);
-        border-radius: 16px;
-        background: rgba(255,255,255,.97);
-        color: #171a21;
-        box-shadow: 0 20px 70px rgba(0,0,0,.18);
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 8px;
-        text-align: center;
-      }
-      body.dark #codeNestLoading .cn-loading-card {
-        background: rgba(18,23,32,.98);
-        color: #f3f5f8;
-      }
-      #codeNestLoading strong { font-size: 14px; }
-      #codeNestLoading span { color: #737b89; font-size: 11px; }
-      #codeNestLoading .cn-spinner {
-        width: 27px;
-        height: 27px;
-        border-radius: 50%;
-        border: 3px solid rgba(91,92,226,.18);
-        border-top-color: #5b5ce2;
-        animation: cnSpin .75s linear infinite;
-      }
-      @keyframes cnSpin { to { transform: rotate(360deg); } }
+      #codeNestLoading { position:fixed; inset:0; z-index:99999; display:none; align-items:center; justify-content:center; background:rgba(9,12,18,.34); backdrop-filter:blur(4px); pointer-events:all; }
+      #codeNestLoading .cn-loading-card { min-width:220px; max-width:calc(100vw - 40px); padding:22px 24px; border:1px solid rgba(127,135,155,.22); border-radius:16px; background:rgba(255,255,255,.97); color:#171a21; box-shadow:0 20px 70px rgba(0,0,0,.18); display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center; }
+      body.dark #codeNestLoading .cn-loading-card { background:rgba(18,23,32,.98); color:#f3f5f8; }
+      #codeNestLoading strong { font-size:14px; }
+      #codeNestLoading span { color:#737b89; font-size:11px; }
+      #codeNestLoading .cn-spinner { width:27px; height:27px; border-radius:50%; border:3px solid rgba(91,92,226,.18); border-top-color:#5b5ce2; animation:cnSpin .75s linear infinite; }
+      @keyframes cnSpin { to { transform:rotate(360deg); } }
     `;
-
     document.head.appendChild(style);
     document.body.appendChild(root);
     return root;
@@ -72,10 +37,8 @@
     const root = getUI();
     if (on) {
       state.count++;
-      root.querySelector("#codeNestLoadingTitle").textContent =
-        title || "読み込み中…";
-      root.querySelector("#codeNestLoadingText").textContent =
-        text || "しばらくお待ちください";
+      root.querySelector("#codeNestLoadingTitle").textContent = title || "読み込み中…";
+      root.querySelector("#codeNestLoadingText").textContent = text || "しばらくお待ちください";
       root.style.display = "flex";
       document.body.dataset.codeNestBusy = "true";
     } else {
@@ -89,38 +52,22 @@
 
   globalThis.codeNestSetLoading = setLoading;
 
-  // Python runtime is loaded dynamically by app.js.
-  // Watch for pyodide.js so the overlay appears before the browser
-  // starts the potentially slow runtime download.
   const originalAppendChild = Node.prototype.appendChild;
   if (!globalThis.__codeNestAppendGuard) {
     Node.prototype.appendChild = function(node) {
       try {
-        if (
-          node &&
-          node.tagName === "SCRIPT" &&
-          typeof node.src === "string" &&
-          node.src.includes("/pyodide/")
-        ) {
-          setLoading(
-            true,
-            "Pythonを読み込み中…",
-            "初回起動では少し時間がかかります"
-          );
-
+        if (node && node.tagName === "SCRIPT" && typeof node.src === "string" && node.src.includes("/pyodide/")) {
+          setLoading(true, "Pythonを読み込み中…", "初回起動では少し時間がかかります");
           const done = () => setLoading(false);
-          node.addEventListener("load", done, { once: true });
-          node.addEventListener("error", done, { once: true });
+          node.addEventListener("load", done, { once:true });
+          node.addEventListener("error", done, { once:true });
         }
       } catch (_) {}
       return originalAppendChild.call(this, node);
     };
-
     globalThis.__codeNestAppendGuard = true;
   }
 
-  // Browser previews are untrusted user code. Keep them in an opaque,
-  // script-capable sandbox so they cannot share Code Nest's origin/storage.
   function hardenPreviewFrame() {
     const frame = document.getElementById("previewFrame");
     if (!frame) return;
@@ -130,13 +77,11 @@
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", hardenPreviewFrame, { once: true });
+    document.addEventListener("DOMContentLoaded", hardenPreviewFrame, { once:true });
   } else {
     hardenPreviewFrame();
   }
 
-  // Opening the preview Blob directly in a new tab would remove the iframe
-  // sandbox. Block that escape hatch and keep previews inside the sandbox.
   document.addEventListener("click", event => {
     const target = event.target.closest?.("#previewNewTab");
     if (!target) return;
@@ -147,7 +92,6 @@
     target.textContent = "サンドボックス内で実行中";
   }, true);
 
-  // Prevent accidental clicks while the runtime/package is loading.
   document.addEventListener("click", event => {
     if (!document.body.dataset.codeNestBusy) return;
     const target = event.target.closest("button, a, input, textarea, select");
@@ -157,18 +101,16 @@
     }
   }, true);
 
-  // Load the project-preview override after app.js so it can replace the
-  // preview/run handlers without rewriting the large minified app bundle.
   function loadPreviewFixes() {
     if (document.querySelector('script[data-code-nest-preview-fixes]')) return;
     const script = document.createElement("script");
-    script.src = "preview-fixes.js";
+    script.src = "preview-fixes.js?v=2";
     script.dataset.codeNestPreviewFixes = "true";
     document.body.appendChild(script);
   }
 
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => setTimeout(loadPreviewFixes, 0), { once: true });
+    document.addEventListener("DOMContentLoaded", () => setTimeout(loadPreviewFixes, 0), { once:true });
   } else {
     setTimeout(loadPreviewFixes, 0);
   }
