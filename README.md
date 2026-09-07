@@ -1,51 +1,61 @@
 # Code Nest 🪺
 
-**Code Nest** is a local-first browser notebook inspired by modern coding workspaces.
+**Code Nest** は、最新のコーディング環境にインスパイアされた、ローカルファーストのブラウザNotebookです。
 
-## ✨ Current release
+## ✨ 現在のリリース
 
-The UI is designed like a small premium developer app while staying deployable on GitHub Pages.
+UIは小さなプレミアム開発アプリのようなデザインを採用しつつ、GitHub Pagesでデプロイできる構成になっています。
 
-- 🐍 Python cells with Pyodide
-- 📝 Markdown cells with live preview
-- 🖥️ Browser Terminal / Bash-like shell
-- ⌁ Interactive Bash Console with command history and tab completion
-- 📦 Browser `pip install` bridge for Pyodide / micropip
-- ▶ Run one cell or run every Python cell
-- 💾 Automatic local saving
-- 🌙 Light / dark theme
-- 🔎 Command search
-- ⇩ Export the notebook as JSON
-- 📱 Responsive mobile layout
-- 🧩 Local browser filesystem for Terminal cells
+- 🐍 PyodideによるPythonセル
+- 📝 ライブプレビューに対応したMarkdownセル
+- 🖥️ ブラウザ上のTerminal / Bash風シェル
+- ⌁ コマンド履歴とTab補完に対応したインタラクティブBashコンソール
+- 📦 Pyodide / micropip向けのブラウザ `pip install` ブリッジ
+- ▶ 1つのセルだけを実行、またはすべてのPythonセルを実行
+- 💾 自動ローカル保存
+- 🌙 ライト / ダークテーマ
+- 🔎 コマンド検索
+- ⇩ NotebookをJSONとして書き出し
+- 📱 スマートフォンなどに対応したレスポンシブレイアウト
+- 🧩 Terminalセル用のローカルブラウザファイルシステム
 
-## Bash Console note
+## Bash Consoleについて
 
-The Bash Console in the current GitHub Pages build is a **browser-only Bash-like shell**, not a real Linux process. It shares the browser filesystem with Terminal cells and provides common shell commands without requiring a server.
+現在のGitHub Pages版に搭載されているBash Consoleは、**ブラウザ上だけで動作するBash風シェル**であり、実際のLinuxプロセスではありません。
 
-Supported commands include `help`, `pwd`, `ls`, `cd`, `mkdir`, `touch`, `cat`, `echo`, `rm`, `clear`, `uname`, `whoami`, `date`, and `python`.
+Terminalセルとブラウザ上のファイルシステムを共有し、サーバーを必要とせずに一般的なシェルコマンドを利用できます。
 
-The shell also recognizes:
+対応しているコマンドには、`help`、`pwd`、`ls`、`cd`、`mkdir`、`touch`、`cat`、`echo`、`rm`、`clear`、`uname`、`whoami`、`date`、`python` などがあります。
+
+シェルでは、次のコマンドも認識されます。
 
 ```bash
 pip install scratchattach
 python -m pip install scratchattach
 ```
 
-These install commands are routed to Pyodide's `micropip` inside the same browser Python runtime used by Code cells. This is **not** a normal OS-level `pip` or system package manager.
+これらのインストールコマンドは、通常のOSレベルの `pip` やシステムパッケージマネージャーとして動くのではなく、Codeセルと同じブラウザ上のPython環境にあるPyodideの `micropip` へ送られます。
 
-Use **↑ / ↓** to move through command history, **Tab** for basic completion, and **Ctrl+L** to clear the console.
+**↑ / ↓** でコマンド履歴を移動し、**Tab** で基本的な補完、**Ctrl+L** でコンソールをクリアできます。
 
-For a future real Linux Bash environment, Code Nest would need a server/container runtime. WebContainers are another browser-based option for Node.js and shell-like workloads, but they require cross-origin isolation headers such as COOP/COEP. See the WebContainers docs for deployment requirements.
+将来的に本物のLinux Bash環境を実現するには、サーバーやコンテナによる実行環境が必要になります。
 
-## Python runtime
+WebContainersも、Node.jsやシェル風の処理をブラウザ上で動かすための選択肢の1つですが、デプロイ時にはCOOP/COEPなどのクロスオリジン分離用ヘッダーが必要になります。詳しくはWebContainersのドキュメントを参照してください。
 
-Python execution is performed locally in the browser with Pyodide. The first Python run may take a little longer because the runtime is downloaded into the browser.
+## Pythonランタイム
 
-Packages installed through `pip install` use `micropip`, which supports pure-Python wheels and Pyodide-compatible wheels. Packages that require native extensions unavailable for WebAssembly may still fail to install.
+Pythonの実行は、Pyodideを使用してブラウザ内でローカルに行われます。
 
-## Deploy
+最初にPythonを実行するときは、ブラウザへランタイムをダウンロードする必要があるため、少し時間がかかる場合があります。
 
-This project is designed for GitHub Pages using **main / (root)**.
+`pip install` でインストールしたパッケージは `micropip` を使用します。
 
-Repository: https://github.com/maru-m4ru-maru/code-nest
+`micropip` は純粋なPython製Wheelや、Pyodideに対応したWheelをサポートしています。
+
+ネイティブ拡張機能を必要とし、WebAssembly環境で利用できないパッケージは、インストールに失敗する場合があります。
+
+## デプロイ
+
+このプロジェクトは、GitHub Pagesの **main / (root)** 構成での利用を想定しています。
+
+リポジトリ: https://github.com/maru-m4ru-maru/code-nest
