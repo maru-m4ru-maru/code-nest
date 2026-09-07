@@ -1,36 +1,29 @@
-// Code Nest runtime loader V0.3.9
+// Code Nest runtime loader V0.3.10
 (() => {
-  "use strict";
+  'use strict';
 
-  // Keep this loader deliberately small. Studio's main app owns execution;
-  // this file only loads the recovery layer and hardens the preview iframe.
-  function loadScript(src, marker) {
-    if (document.querySelector(`script[${marker}]`)) return;
-    const script = document.createElement("script");
-    script.src = src;
-    script.setAttribute(marker, "true");
-    document.head.appendChild(script);
-  }
-
-  loadScript("share.js?v=9", "data-code-nest-share-loader");
-  loadScript("runtime-fix.js?v=9", "data-code-nest-runtime-fix");
-
-  function hardenPreviewFrame() {
-    const frame = document.getElementById("previewFrame");
-    if (!frame) return;
-    frame.setAttribute("sandbox", "allow-scripts");
-    frame.setAttribute("referrerpolicy", "no-referrer");
-    frame.setAttribute("allow", "");
+  // runtime-fix must be loaded deterministically. It installs its click capture
+  // handler before app.js' cell handlers get a chance to route Preview to Python.
+  if (!document.querySelector('script[data-code-nest-runtime-fix]')) {
+    document.write('<script src="runtime-fix.js?v=10" data-code-nest-runtime-fix><\\/script>');
   }
 
   function setVersion() {
-    document.querySelectorAll(".sidebar-footer span").forEach((el) => {
-      if (/^V0\.3\.\d+$/i.test(el.textContent.trim())) el.textContent = "V0.3.9";
+    document.querySelectorAll('.sidebar-footer span').forEach((el) => {
+      if (/^V0\.3\.\d+$/i.test(el.textContent.trim())) el.textContent = 'V0.3.10';
     });
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => {
+  function hardenPreviewFrame() {
+    const frame = document.getElementById('previewFrame');
+    if (!frame) return;
+    frame.setAttribute('sandbox', 'allow-scripts');
+    frame.setAttribute('referrerpolicy', 'no-referrer');
+    frame.setAttribute('allow', '');
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', () => {
       hardenPreviewFrame();
       setVersion();
     }, { once: true });
@@ -39,8 +32,8 @@
     setVersion();
   }
 
-  const observer = new MutationObserver(hardenPreviewFrame);
-  observer.observe(document.documentElement, { childList: true, subtree: true });
+  new MutationObserver(() => hardenPreviewFrame())
+    .observe(document.documentElement, { childList: true, subtree: true });
 
-  console.log("[Code Nest] V0.3.9 runtime loader ready");
+  console.log('[Code Nest] V0.3.10 runtime loader ready');
 })();
