@@ -1,4 +1,4 @@
-// Code Nest loading/runtime guard V0.3.5
+// Code Nest loading/runtime guard V0.3.6
 (() => {
   "use strict";
 
@@ -64,6 +64,13 @@
     globalThis.__codeNestAppendGuard = true;
   }
 
+  // Load the click bridge synchronously while the HTML parser is still active.
+  // This guarantees Run/Preview interception is registered before app.js attaches
+  // its per-cell click handlers.
+  if (!document.querySelector('script[data-code-nest-action-fix]')) {
+    document.write('<script src="action-fix.js?v=6" data-code-nest-action-fix="true"><\\/script>');
+  }
+
   function hardenPreviewFrame() {
     const frame = document.getElementById("previewFrame");
     if (!frame) return;
@@ -72,27 +79,25 @@
     frame.setAttribute("allow", "");
   }
 
-  function loadScriptOnce(src, marker) {
-    if (document.querySelector(`script[data-${marker}]`)) return;
+  function loadPreviewFix() {
+    if (document.querySelector('script[data-code-nest-preview-fix]')) return;
     const script = document.createElement("script");
-    script.src = `${src}?v=5`;
-    script.dataset[marker] = "true";
-    script.async = false;
+    script.src = "preview-fixes.js?v=6";
+    script.dataset.codeNestPreviewFix = "true";
     document.body.appendChild(script);
   }
 
-  // The fix scripts are loaded immediately. They use delegated document events,
-  // so they remain safe even though app.js runs just after this file.
-  function loadRuntimeFixes() {
-    loadScriptOnce("preview-fixes.js", "codeNestPreviewFixes");
-    loadScriptOnce("action-fix.js", "codeNestActionFix");
+  // preview-fixes.js needs the fully-created Studio DOM. Load it after parsing.
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", () => {
+      hardenPreviewFrame();
+      loadPreviewFix();
+    }, { once:true });
+  } else {
     hardenPreviewFrame();
+    loadPreviewFix();
   }
 
-  loadRuntimeFixes();
-
-  // The preview modal is declared after app.js/loading.js in studio.html.
-  // Re-apply the sandbox as soon as that element appears.
   const previewObserver = new MutationObserver(hardenPreviewFrame);
   previewObserver.observe(document.documentElement, { childList:true, subtree:true });
 
