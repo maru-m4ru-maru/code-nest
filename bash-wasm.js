@@ -12,6 +12,34 @@
     historyIndex: -1
   };
 
+  // Compatibility guards for the current Studio markup/app.js.
+  // app.js expects a #toast element to exist and currently calls map() on
+  // the result of $('.cell'). Keep the fix local so the main app can be
+  // corrected later without breaking startup in the meantime.
+  if (!document.getElementById("toast")) {
+    const toast = document.createElement("div");
+    toast.id = "toast";
+    toast.setAttribute("aria-live", "polite");
+    document.body.appendChild(toast);
+  }
+
+  const originalQuerySelector = Document.prototype.querySelector;
+  if (!globalThis.__codeNestCellQueryPatch) {
+    Document.prototype.querySelector = function(selector) {
+      const result = originalQuerySelector.call(this, selector);
+      if (selector === ".cell" && result && typeof result.map !== "function") {
+        Object.defineProperty(result, "map", {
+          configurable: true,
+          value(callback, thisArg) {
+            return [...document.querySelectorAll(".cell")].map(callback, thisArg);
+          }
+        });
+      }
+      return result;
+    };
+    globalThis.__codeNestCellQueryPatch = true;
+  }
+
   const output = () => document.getElementById("bashOutput");
   const input = () => document.getElementById("bashInput");
   const status = (text) => {
@@ -86,7 +114,7 @@
     }
 
     async exec(command) {
-      const tokens = command.trim().split(/\\s+/);
+      const tokens = command.trim().split(/\s+/);
       const cmd = tokens.shift() || "";
       const arg = tokens.join(" ");
 
@@ -170,7 +198,7 @@
   function wire() {
     // app.js is the single owner of the Bash modal controls.
     // Keeping listeners here would execute every command twice.
-    setPrompt();
+    status();
   }
 
   window.CodeNestBash = {
