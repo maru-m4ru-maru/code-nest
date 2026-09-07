@@ -1,4 +1,4 @@
-// Code Nest loading guard V0.3.3
+// Code Nest loading guard V0.3.4
 (() => {
   "use strict";
 
@@ -61,6 +61,7 @@
           const done = () => setLoading(false);
           node.addEventListener("load", done, { once:true });
           node.addEventListener("error", done, { once:true });
+          setTimeout(done, 45000);
         }
       } catch (_) {}
       return originalAppendChild.call(this, node);
@@ -82,37 +83,23 @@
     hardenPreviewFrame();
   }
 
-  document.addEventListener("click", event => {
-    const target = event.target.closest?.("#previewNewTab");
-    if (!target) return;
-    event.preventDefault();
-    event.stopPropagation();
-    target.disabled = true;
-    target.title = "セキュリティのため、プレビューはサンドボックス内で実行されます";
-    target.textContent = "サンドボックス内で実行中";
-  }, true);
-
-  document.addEventListener("click", event => {
-    if (!document.body.dataset.codeNestBusy) return;
-    const target = event.target.closest("button, a, input, textarea, select");
-    if (target && !target.closest("#codeNestLoading")) {
-      event.preventDefault();
-      event.stopPropagation();
-    }
-  }, true);
-
-  function loadPreviewFixes() {
-    if (document.querySelector('script[data-code-nest-preview-fixes]')) return;
+  function loadScriptOnce(src, marker) {
+    if (document.querySelector(`script[data-${marker}]`)) return;
     const script = document.createElement("script");
-    script.src = "preview-fixes.js?v=2";
-    script.dataset.codeNestPreviewFixes = "true";
+    script.src = `${src}?v=4`;
+    script.dataset[marker] = "true";
     document.body.appendChild(script);
   }
 
+  function loadRuntimeFixes() {
+    loadScriptOnce("preview-fixes.js", "codeNestPreviewFixes");
+    loadScriptOnce("action-fix.js", "codeNestActionFix");
+  }
+
   if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => setTimeout(loadPreviewFixes, 0), { once:true });
+    document.addEventListener("DOMContentLoaded", () => setTimeout(loadRuntimeFixes, 0), { once:true });
   } else {
-    setTimeout(loadPreviewFixes, 0);
+    setTimeout(loadRuntimeFixes, 0);
   }
 
   console.log("[Code Nest] loading guard ready");
