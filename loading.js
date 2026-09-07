@@ -2,11 +2,13 @@
 (() => {
   'use strict';
 
-  // V0.4 owns Preview in one standalone module. No legacy preview recovery
-  // layers are loaded here, so Python / Markdown / Terminal / API / Share stay
-  // on their existing code paths.
+  // V0.4 Preview is owned by one standalone module. Keep the existing
+  // Share module loaded separately so Preview changes do not affect sharing.
   if (!document.querySelector('script[data-code-nest-preview-v4]')) {
     document.write('<script src="preview-v4.js?v=40" data-code-nest-preview-v4><\\/script>');
+  }
+  if (!document.querySelector('script[data-code-nest-share]')) {
+    document.write('<script src="share.js?v=40" data-code-nest-share><\\/script>');
   }
 
   function setVersion() {
