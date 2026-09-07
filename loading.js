@@ -1,4 +1,4 @@
-// Code Nest loading guard V0.3.4
+// Code Nest loading/runtime guard V0.3.5
 (() => {
   "use strict";
 
@@ -7,7 +7,6 @@
   function getUI() {
     let root = document.getElementById("codeNestLoading");
     if (root) return root;
-
     root = document.createElement("div");
     root.id = "codeNestLoading";
     root.innerHTML = `
@@ -15,19 +14,15 @@
         <div class="cn-spinner"></div>
         <strong id="codeNestLoadingTitle">読み込み中…</strong>
         <span id="codeNestLoadingText">しばらくお待ちください</span>
-      </div>
-    `;
-
+      </div>`;
     const style = document.createElement("style");
     style.textContent = `
-      #codeNestLoading { position:fixed; inset:0; z-index:99999; display:none; align-items:center; justify-content:center; background:rgba(9,12,18,.34); backdrop-filter:blur(4px); pointer-events:all; }
-      #codeNestLoading .cn-loading-card { min-width:220px; max-width:calc(100vw - 40px); padding:22px 24px; border:1px solid rgba(127,135,155,.22); border-radius:16px; background:rgba(255,255,255,.97); color:#171a21; box-shadow:0 20px 70px rgba(0,0,0,.18); display:flex; flex-direction:column; align-items:center; gap:8px; text-align:center; }
-      body.dark #codeNestLoading .cn-loading-card { background:rgba(18,23,32,.98); color:#f3f5f8; }
-      #codeNestLoading strong { font-size:14px; }
-      #codeNestLoading span { color:#737b89; font-size:11px; }
-      #codeNestLoading .cn-spinner { width:27px; height:27px; border-radius:50%; border:3px solid rgba(91,92,226,.18); border-top-color:#5b5ce2; animation:cnSpin .75s linear infinite; }
-      @keyframes cnSpin { to { transform:rotate(360deg); } }
-    `;
+      #codeNestLoading{position:fixed;inset:0;z-index:99999;display:none;align-items:center;justify-content:center;background:rgba(9,12,18,.34);backdrop-filter:blur(4px);pointer-events:all}
+      #codeNestLoading .cn-loading-card{min-width:220px;max-width:calc(100vw - 40px);padding:22px 24px;border:1px solid rgba(127,135,155,.22);border-radius:16px;background:rgba(255,255,255,.97);color:#171a21;box-shadow:0 20px 70px rgba(0,0,0,.18);display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
+      body.dark #codeNestLoading .cn-loading-card{background:rgba(18,23,32,.98);color:#f3f5f8}
+      #codeNestLoading strong{font-size:14px}#codeNestLoading span{color:#737b89;font-size:11px}
+      #codeNestLoading .cn-spinner{width:27px;height:27px;border-radius:50%;border:3px solid rgba(91,92,226,.18);border-top-color:#5b5ce2;animation:cnSpin .75s linear infinite}
+      @keyframes cnSpin{to{transform:rotate(360deg)}}`;
     document.head.appendChild(style);
     document.body.appendChild(root);
     return root;
@@ -77,30 +72,29 @@
     frame.setAttribute("allow", "");
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", hardenPreviewFrame, { once:true });
-  } else {
-    hardenPreviewFrame();
-  }
-
   function loadScriptOnce(src, marker) {
     if (document.querySelector(`script[data-${marker}]`)) return;
     const script = document.createElement("script");
-    script.src = `${src}?v=4`;
+    script.src = `${src}?v=5`;
     script.dataset[marker] = "true";
+    script.async = false;
     document.body.appendChild(script);
   }
 
+  // The fix scripts are loaded immediately. They use delegated document events,
+  // so they remain safe even though app.js runs just after this file.
   function loadRuntimeFixes() {
     loadScriptOnce("preview-fixes.js", "codeNestPreviewFixes");
     loadScriptOnce("action-fix.js", "codeNestActionFix");
+    hardenPreviewFrame();
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", () => setTimeout(loadRuntimeFixes, 0), { once:true });
-  } else {
-    setTimeout(loadRuntimeFixes, 0);
-  }
+  loadRuntimeFixes();
 
-  console.log("[Code Nest] loading guard ready");
+  // The preview modal is declared after app.js/loading.js in studio.html.
+  // Re-apply the sandbox as soon as that element appears.
+  const previewObserver = new MutationObserver(hardenPreviewFrame);
+  previewObserver.observe(document.documentElement, { childList:true, subtree:true });
+
+  console.log("[Code Nest] loading/runtime guard ready");
 })();
