@@ -1,215 +1,256 @@
-/* Code Nest runtime recovery V0.3.9 */
+/* Code Nest preview recovery V0.3.10 */
 (() => {
   'use strict';
 
-  const $ = (s) => document.querySelector(s);
-  const $$ = (s) => [...document.querySelectorAll(s)];
   let previewUrl = null;
+
+  const $ = (s, root = document) => root.querySelector(s);
+  const $$ = (s, root = document) => [...root.querySelectorAll(s)];
 
   function toast(message) {
     if (typeof window.showToast === 'function') {
       window.showToast(message);
       return;
     }
-    let el = $('#runtimeFixToast');
+    let el = $('#previewFixToast');
     if (!el) {
       el = document.createElement('div');
-      el.id = 'runtimeFixToast';
-      el.style.cssText = 'position:fixed;left:50%;bottom:54px;transform:translateX(-50%);z-index:20000;padding:9px 13px;border-radius:10px;background:#111827;color:#fff;font:12px system-ui,sans-serif;pointer-events:none;opacity:0;transition:opacity .18s';
+      el.id = 'previewFixToast';
+      el.style.cssText = 'position:fixed;left:50%;bottom:54px;transform:translateX(-50%);z-index:99999;padding:10px 14px;border-radius:10px;background:#111827;color:#fff;font:13px system-ui,sans-serif;box-shadow:0 8px 30px rgba(0,0,0,.25);pointer-events:none';
       document.body.appendChild(el);
     }
     el.textContent = message;
-    el.style.opacity = '1';
     clearTimeout(el._timer);
-    el._timer = setTimeout(() => { el.style.opacity = '0'; }, 1600);
+    el._timer = setTimeout(() => el.remove(), 1800);
   }
 
-  function fileName(cell) {
-    return (cell?.querySelector('.cell-name')?.value || 'cell.py').trim().toLowerCase();
+  function currentName(cell) {
+    return (cell.querySelector('.cell-name')?.value || '').trim();
   }
 
-  function isWebFile(name) {
+  function isWebName(name) {
     return /\.(?:html?|css|m?js)$/i.test(name);
   }
 
-  function projectFiles() {
+  function collectFiles() {
     const files = new Map();
-    $$('.cell[data-type="code"]').forEach((cell) => {
-      const name = (cell.querySelector('.cell-name')?.value || '').trim().replace(/^\/+/, '');
-      const source = cell.querySelector('textarea')?.value || '';
-      if (!name) return;
-      files.set('/' + name.split('/').filter(Boolean).join('/'), { path: '/' + name.split('/').filter(Boolean).join('/'), source });
+    $$('.cell[data-type="code"]').forEach(cell => {
+      const raw = currentName(cell).replace(/^\/+/, '');
+      if (!raw) return;
+      const path = '/' + raw.split('/').filter(Boolean).join('/');
+      files.set(path, {
+        path,
+        source: cell.querySelector('textarea')?.value || ''
+      });
     });
     return files;
   }
 
-  function normalize(basePath, target) {
-    const base = String(basePath || '/').split('/').filter(Boolean);
-    base.pop();
-    const raw = String(target || '');
-    const parts = (raw.startsWith('/') ? raw : '/' + base.concat(raw).join('/')).split('/');
+  function resolvePath(fromFile, target) {
+    const value = String(target || '').trim();
+    if (!value || /^(?:https?:|data:|blob:|javascript:|mailto:|#)/i.test(value)) return null;
+
+    const baseParts = String(fromFile || '/').split('/').filter(Boolean);
+    baseParts.pop();
+    const rawParts = (value.startsWith('/') ? value : '/' + baseParts.concat(value).join('/')).split('/');
     const out = [];
-    for (const p of parts) {
-      if (!p || p === '.') continue;
-      if (p === '..') out.pop();
-      else out.push(p);
+    for (const part of rawParts) {
+      if (!part || part === '.') continue;
+      if (part === '..') out.pop();
+      else out.push(part);
     }
     return '/' + out.join('/');
   }
 
-  function buildHtml() {
-    const files = projectFiles();
-    const htmlFile = [...files.values()].find((f) => /\.html?$/i.test(f.path));
-    if (!htmlFile) {
-      return '<!doctype html><html><body style="font-family:system-ui;padding:24px"><h2>Code Nest Preview</h2><p>HTMLファイル（例: index.html）を追加してください。</p></body></html>';
+  function escapeInlineScript(source) {
+    return source.replace(/<\/script/gi, '<\\/script');
+  }
+
+  function buildPreviewDocument() {
+    const files = collectFiles();
+    const html = [...files.values()].find(f => /\.html?$/i.test(f.path));
+
+    if (!html) {
+      return '<!doctype html><html><body style="font-family:system-ui,sans-serif;padding:24px"><h2>Code Nest Preview</h2><p>HTMLファイル（例: index.html）を追加してください。</p></body></html>';
     }
 
-    const doc = new DOMParser().parseFromString(htmlFile.source, 'text/html');
+    const doc = new DOMParser().parseFromString(html.source, 'text/html');
+    const missing = [];
 
-    for (const link of doc.querySelectorAll('link[href]')) {
-      const href = link.getAttribute('href');
-      const path = normalize(htmlFile.path, href);
-      const file = files.get(path);
-      if (file && /\.css$/i.test(file.path)) {
-        const style = doc.createElement('style');
-        style.textContent = file.source;
-        link.replaceWith(style);
+    // Inline project CSS files referenced by relative <link href="...">.
+    $$('link[href]', doc).forEach(link => {
+      const target = resolvePath(html.path, link.getAttribute('href'));
+      const file = target && files.get(target);
+      if (!file) {
+        if (target) missing.push(target);
+        return;
       }
-    }
+      if (!/\.css$/i.test(file.path)) return;
+      const style = doc.createElement('style');
+      style.setAttribute('data-code-nest-path', file.path);
+      style.textContent = file.source;
+      link.replaceWith(style);
+    });
 
-    for (const script of doc.querySelectorAll('script[src]')) {
-      const src = script.getAttribute('src');
-      const path = normalize(htmlFile.path, src);
-      const file = files.get(path);
-      if (file && /\.m?js$/i.test(file.path)) {
-        const inline = doc.createElement('script');
-        if (/\.mjs$/i.test(file.path)) inline.type = 'module';
-        inline.textContent = file.source.replace(/<\/(script)/gi, '<\\/$1');
-        script.replaceWith(inline);
+    // Inline project JavaScript files referenced by relative <script src="...">.
+    $$('script[src]', doc).forEach(script => {
+      const target = resolvePath(html.path, script.getAttribute('src'));
+      const file = target && files.get(target);
+      if (!file) {
+        if (target) missing.push(target);
+        return;
       }
-    }
+      if (!/\.m?js$/i.test(file.path)) return;
+      const inline = doc.createElement('script');
+      if (/\.mjs$/i.test(file.path)) inline.type = 'module';
+      inline.setAttribute('data-code-nest-path', file.path);
+      inline.textContent = escapeInlineScript(file.source);
+      script.replaceWith(inline);
+    });
 
-    return '<!doctype html>' + doc.documentElement.outerHTML;
+    // Keep external URLs intact, but make local project links work whenever possible.
+    $$('[src],[href]', doc).forEach(el => {
+      const attr = el.hasAttribute('src') ? 'src' : 'href';
+      const value = el.getAttribute(attr);
+      const target = resolvePath(html.path, value);
+      const file = target && files.get(target);
+      if (!file) return;
+
+      if (attr === 'href' && /\.(?:html?|htm)$/i.test(file.path)) {
+        // Prevent the preview from escaping to a non-existent project URL.
+        el.setAttribute(attr, '#');
+      }
+    });
+
+    const note = missing.length
+      ? '<script>console.warn("Code Nest preview: missing project files", ' + JSON.stringify([...new Set(missing)]) + ');</script>'
+      : '';
+
+    return '<!doctype html>' + doc.documentElement.outerHTML.replace('</body>', note + '</body>');
+  }
+
+  function ensureModal() {
+    let modal = $('#previewModal');
+    if (modal) return modal;
+
+    modal = document.createElement('div');
+    modal.id = 'previewModal';
+    modal.setAttribute('aria-hidden', 'true');
+    modal.innerHTML = `
+      <div data-preview-close class="preview-fix-backdrop"></div>
+      <div class="preview-fix-window" role="dialog" aria-modal="true" aria-labelledby="previewFixTitle">
+        <div class="preview-fix-head">
+          <strong id="previewFixTitle">ブラウザプレビュー</strong>
+          <button type="button" id="previewFixClose" aria-label="閉じる">×</button>
+        </div>
+        <div class="preview-fix-body"><iframe id="previewFrame" title="Code Nest Preview" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe></div>
+      </div>`;
+
+    const style = document.createElement('style');
+    style.textContent = `
+      #previewModal.preview-fix-visible{position:fixed;inset:0;z-index:50000;display:flex;align-items:center;justify-content:center;padding:24px;background:rgba(8,12,22,.55);backdrop-filter:blur(8px)}
+      #previewModal.preview-fix-hidden{display:none}
+      .preview-fix-window{width:min(1100px,96vw);height:min(760px,92vh);display:flex;flex-direction:column;background:#fff;border-radius:18px;overflow:hidden;box-shadow:0 30px 100px rgba(0,0,0,.35)}
+      .preview-fix-head{height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 14px 0 18px;border-bottom:1px solid #e5e7eb;font:600 14px system-ui,sans-serif}
+      #previewFixClose{border:0;background:transparent;font-size:28px;line-height:1;cursor:pointer;padding:3px 8px}
+      .preview-fix-body{flex:1;min-height:0;background:#fff}
+      .preview-fix-body iframe{display:block;width:100%;height:100%;border:0;background:#fff}
+    `;
+    document.head.appendChild(style);
+    document.body.appendChild(modal);
+    modal.classList.add('preview-fix-hidden');
+
+    $('#previewFixClose').addEventListener('click', closePreview);
+    $('[data-preview-close]', modal).addEventListener('click', closePreview);
+    return modal;
   }
 
   function openPreview() {
-    const frame = $('#previewFrame');
-    const modal = $('#previewModal');
-    if (!frame || !modal) {
-      toast('プレビュー画面を読み込めませんでした');
-      return;
-    }
+    const modal = ensureModal();
+    const frame = $('#previewFrame', modal);
+    const label = $('#previewLabel') || $('#previewFixTitle', modal);
+
     if (previewUrl) {
       try { URL.revokeObjectURL(previewUrl); } catch (_) {}
+      previewUrl = null;
     }
-    previewUrl = URL.createObjectURL(new Blob([buildHtml()], { type: 'text/html' }));
+
+    const html = buildPreviewDocument();
+    previewUrl = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    frame.setAttribute('sandbox', 'allow-scripts');
+    frame.setAttribute('referrerpolicy', 'no-referrer');
     frame.src = previewUrl;
     frame.dataset.previewUrl = previewUrl;
-    modal.classList.add('open');
+
+    modal.classList.remove('preview-fix-hidden');
+    modal.classList.add('preview-fix-visible');
     modal.setAttribute('aria-hidden', 'false');
-    const label = $('#previewLabel');
     if (label) label.textContent = 'ブラウザプレビュー';
   }
 
   function closePreview() {
     const modal = $('#previewModal');
     if (modal) {
-      modal.classList.remove('open');
+      modal.classList.remove('preview-fix-visible');
+      modal.classList.add('preview-fix-hidden');
       modal.setAttribute('aria-hidden', 'true');
     }
+    const frame = $('#previewFrame');
+    if (frame) frame.removeAttribute('src');
     if (previewUrl) {
       try { URL.revokeObjectURL(previewUrl); } catch (_) {}
       previewUrl = null;
     }
   }
 
-  // Capture before app.js cell handlers: guarantees buttons work.
-  document.addEventListener('click', (event) => {
-    const button = event.target.closest?.('button[data-act="run"],button[data-act="preview"]');
-    if (!button) return;
+  function isPreviewButton(button) {
+    return button?.matches?.('button[data-act="run"],button[data-act="preview"]');
+  }
+
+  // Capture phase runs before app.js' per-cell click handler, so Preview cannot fall through to Python.
+  document.addEventListener('click', event => {
+    const button = event.target?.closest?.('button[data-act="run"],button[data-act="preview"]');
+    if (!isPreviewButton(button)) return;
+
     const cell = button.closest('.cell');
-    if (!cell) return;
+    if (!cell || cell.dataset.type !== 'code') return;
 
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation();
-
+    const name = currentName(cell);
     const action = button.dataset.act;
-    const type = cell.dataset.type;
+
     if (action === 'preview') {
-      if (type !== 'code') return toast('Markdown / Terminalはプレビュー対象ではありません');
-      const name = fileName(cell);
-      if (!isWebFile(name)) return toast('このファイル形式はプレビュー対象ではありません');
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      if (!isWebName(name)) {
+        toast('HTML / CSS / JS ファイルだけプレビューできます');
+        return;
+      }
       openPreview();
       return;
     }
 
-    if (type === 'code') {
-      const name = fileName(cell);
-      if (isWebFile(name)) {
-        openPreview();
-      } else if (typeof window.runPythonCell === 'function') {
-        window.runPythonCell(cell);
-      } else {
-        toast('Python実行環境を読み込めませんでした');
-      }
-      return;
-    }
-
-    if (type === 'markdown' && typeof window.renderMarkdown === 'function') {
-      window.renderMarkdown(cell);
-    } else if (type === 'terminal' && typeof window.runTerminal === 'function') {
-      window.runTerminal(cell);
+    // Run button: web files preview, Python keeps the original executor.
+    if (isWebName(name)) {
+      event.preventDefault();
+      event.stopPropagation();
+      event.stopImmediatePropagation();
+      openPreview();
     }
   }, true);
 
-  // Reliable toolbar Share wiring.
-  const shareButton = $('#shareBtn');
-  if (shareButton && typeof window.CodeNestShare?.shareNotebook === 'function') {
-    shareButton.addEventListener('click', async () => {
-      if (shareButton.dataset.runtimeFixBound) return;
-      shareButton.dataset.runtimeFixBound = '1';
-      shareButton.disabled = true;
-      const old = shareButton.innerHTML;
-      shareButton.textContent = '⏳ 共有中…';
-      try {
-        const data = window.CodeNestShare.snapshotForShare();
-        const url = await window.CodeNestShare.shareNotebook(data);
-        const codeUrl = url + (url.includes('?') ? '&' : '?') + 'view=code';
-        const previewShareUrl = url + (url.includes('?') ? '&' : '?') + 'view=preview';
-        const box = document.createElement('div');
-        box.style.cssText = 'position:fixed;inset:0;z-index:21000;display:grid;place-items:center;background:rgba(15,18,30,.45);backdrop-filter:blur(8px);padding:20px';
-        box.innerHTML = `<div style="width:min(640px,100%);background:#fff;color:#111827;border-radius:20px;padding:22px;box-shadow:0 25px 90px rgba(0,0,0,.25)">
-          <div style="display:flex;justify-content:space-between;align-items:center"><strong style="font-size:20px">Share your project</strong><button id="runtimeShareClose" style="border:0;background:none;font-size:24px;cursor:pointer">×</button></div>
-          <p style="opacity:.65;font-size:12px">コードとプレビューのURLを作成しました。</p>
-          <label style="display:block;margin-top:12px;font-size:11px;font-weight:700">CODE<input readonly value="${codeUrl.replace(/"/g,'&quot;')}" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #ddd;border-radius:10px"></label>
-          <label style="display:block;margin-top:12px;font-size:11px;font-weight:700">PREVIEW<input readonly value="${previewShareUrl.replace(/"/g,'&quot;')}" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #ddd;border-radius:10px"></label>
-          <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><button id="runtimeCodeOpen" style="padding:9px 12px;border:1px solid #ddd;border-radius:10px;background:#fff;cursor:pointer">コードを開く</button><button id="runtimePreviewOpen" style="padding:9px 12px;border:1px solid #ddd;border-radius:10px;background:#fff;cursor:pointer">プレビューを開く</button></div>
-        </div>`;
-        document.body.appendChild(box);
-        $('#runtimeShareClose').onclick = () => box.remove();
-        $('#runtimeCodeOpen').onclick = () => window.open(codeUrl, '_blank', 'noopener,noreferrer');
-        $('#runtimePreviewOpen').onclick = () => window.open(previewShareUrl, '_blank', 'noopener,noreferrer');
-      } catch (e) {
-        console.error('[Code Nest Share]', e);
-        toast('共有に失敗しました: ' + (e?.message || e));
-      } finally {
-        shareButton.disabled = false;
-        shareButton.innerHTML = old;
-        delete shareButton.dataset.runtimeFixBound;
-      }
-    }, true);
-  }
-
-  $('#previewClose')?.addEventListener('click', closePreview, true);
-  document.addEventListener('click', (event) => {
-    if (event.target.matches?.('[data-close="previewModal"]') || event.target.classList?.contains('modal-backdrop')) {
-      if (event.target.closest?.('#previewModal')) closePreview();
-    }
-  }, true);
-  document.addEventListener('keydown', (event) => {
+  document.addEventListener('keydown', event => {
     if (event.key === 'Escape') closePreview();
   });
 
-  console.log('[Code Nest] runtime recovery V0.3.9 ready');
+  // Re-apply the safe sandbox if the app recreates its iframe.
+  new MutationObserver(() => {
+    const frame = $('#previewFrame');
+    if (frame) {
+      frame.setAttribute('sandbox', 'allow-scripts');
+      frame.setAttribute('referrerpolicy', 'no-referrer');
+    }
+  }).observe(document.documentElement, { childList: true, subtree: true });
+
+  console.log('[Code Nest] Preview recovery V0.3.10 ready');
 })();
