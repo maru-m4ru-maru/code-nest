@@ -119,6 +119,34 @@
     globalThis.__codeNestAppendGuard = true;
   }
 
+  // Browser previews are untrusted user code. Keep them in an opaque,
+  // script-capable sandbox so they cannot share Code Nest's origin/storage.
+  function hardenPreviewFrame() {
+    const frame = document.getElementById("previewFrame");
+    if (!frame) return;
+    frame.setAttribute("sandbox", "allow-scripts");
+    frame.setAttribute("referrerpolicy", "no-referrer");
+    frame.setAttribute("allow", "");
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", hardenPreviewFrame, { once: true });
+  } else {
+    hardenPreviewFrame();
+  }
+
+  // Opening the preview Blob directly in a new tab would remove the iframe
+  // sandbox. Block that escape hatch and keep previews inside the sandbox.
+  document.addEventListener("click", event => {
+    const target = event.target.closest?.("#previewNewTab");
+    if (!target) return;
+    event.preventDefault();
+    event.stopPropagation();
+    target.disabled = true;
+    target.title = "セキュリティのため、プレビューはサンドボックス内で実行されます";
+    target.textContent = "サンドボックス内で実行中";
+  }, true);
+
   // Prevent accidental clicks while the runtime/package is loading.
   document.addEventListener("click", event => {
     if (!document.body.dataset.codeNestBusy) return;
