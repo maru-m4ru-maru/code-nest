@@ -1,0 +1,98 @@
+name: Restore homepage samples
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  restore:
+    if: ${{ !contains(github.event.head_commit.message, 'Restore homepage samples') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          persist-credentials: true
+
+      - name: Restore sample sections without touching the current Bash status
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('index.html')
+          text = path.read_text(encoding='utf-8')
+
+          if 'id="sample-tetris"' in text or 'id="sample-homepage"' in text:
+              raise SystemExit('Sample sections already present')
+
+          marker = '<section class="wrap section promise">'
+          if marker not in text:
+              raise SystemExit('Homepage insertion point not found')
+
+          samples = '''<section class="wrap section" id="sample-tetris">
+            <div class="head">
+              <div class="kicker">Sample Project</div>
+              <h2>Code Nestで作った、昔ながらのテトリス。</h2>
+              <p>HTML・CSS・JavaScriptだけで動くサンプルゲームです。コードもプレビューも、別々のURLから開けます。</p>
+            </div>
+            <div class="card">
+              <div style="display:flex;justify-content:space-between;gap:18px;align-items:center;flex-wrap:wrap">
+                <div>
+                  <h3 style="margin:0 0 6px">Code Nest Tetris</h3>
+                  <p style="margin:0;color:var(--muted);font-size:12px">シンプルな見た目と、ちゃんと遊べる回転・ライン消去・レベル機能を搭載。</p>
+                </div>
+                <div class="tags">
+                  <span class="tag">Game</span>
+                  <span class="tag">HTML</span>
+                  <span class="tag">CSS</span>
+                  <span class="tag">JavaScript</span>
+                </div>
+              </div>
+              <div class="actions" style="justify-content:flex-start;margin-bottom:0">
+                <a class="btn primary" href="https://code-nest-worker.maru-0727.workers.dev/share/6222cdb0?view=preview" target="_blank" rel="noopener">プレビューを見る</a>
+                <a class="btn secondary" href="https://code-nest-worker.maru-0727.workers.dev/share/6222cdb0?view=code" target="_blank" rel="noopener">コードを見る</a>
+              </div>
+            </div>
+          </section>
+
+          <section class="wrap section" id="sample-homepage">
+            <div class="head">
+              <div class="kicker">Sample Project</div>
+              <h2>Code Nestのホームページ。</h2>
+              <p>Code Nest自身をCode Nestで作ったサンプルです。コードと完成したプレビューを別々に開けます。</p>
+            </div>
+            <div class="card">
+              <div style="display:flex;justify-content:space-between;gap:18px;align-items:center;flex-wrap:wrap">
+                <div>
+                  <h3 style="margin:0 0 6px">Code Nest Homepage</h3>
+                  <p style="margin:0;color:var(--muted);font-size:12px">このページそのものを、Code Nestの共有機能から公開しています。</p>
+                </div>
+                <div class="tags">
+                  <span class="tag">Web</span>
+                  <span class="tag">HTML</span>
+                  <span class="tag">CSS</span>
+                </div>
+              </div>
+              <div class="actions" style="justify-content:flex-start;margin-bottom:0">
+                <a class="btn primary" href="https://code-nest-worker.maru-0727.workers.dev/share/65e07559?view=preview" target="_blank" rel="noopener">プレビューを見る</a>
+                <a class="btn secondary" href="https://code-nest-worker.maru-0727.workers.dev/share/65e07559?view=code" target="_blank" rel="noopener">コードを見る</a>
+              </div>
+            </div>
+          </section>
+
+          '''
+
+          path.write_text(text.replace(marker, samples + marker, 1), encoding='utf-8')
+          PY
+
+      - name: Commit restored samples and remove temporary workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/restore-homepage-samples.yml
+          git add index.html .github/workflows/restore-homepage-samples.yml
+          git commit -m "Restore homepage samples"
+          git push
