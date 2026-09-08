@@ -1,4 +1,4 @@
-/* Code Nest Project Manager V0.4.8 */
+/* Code Nest Project Manager V0.4.8.1 */
 (() => {
   'use strict';
 
@@ -14,6 +14,17 @@
     } catch (_) {
       return [];
     }
+  }
+
+  function touchCurrentProject() {
+    try {
+      const list = readProjects();
+      const next = list.map((item) => item && item.id === projectId
+        ? { ...item, updatedAt: Date.now() }
+        : item
+      );
+      localStorage.setItem(META_KEY, JSON.stringify(next));
+    } catch (_) {}
   }
 
   function currentMeta() {
@@ -32,26 +43,27 @@
     }
   }
 
+  function goDashboard(event) {
+    event?.preventDefault?.();
+    event?.stopPropagation?.();
+    touchCurrentProject();
+    window.location.assign('./dashboard.html');
+  }
+
   function wire() {
     const brand = document.querySelector('.sidebar .brand');
     if (brand && !brand.dataset.projectDashboard) {
       brand.dataset.projectDashboard = '1';
       brand.setAttribute('role', 'link');
       brand.setAttribute('tabindex', '0');
+      brand.setAttribute('aria-label', 'Code Nest Dashboardへ');
       brand.title = 'ダッシュボードへ';
       brand.style.cursor = 'pointer';
-      const go = () => {
-        try { localStorage.setItem(META_KEY, JSON.stringify(readProjects().map((item) => item.id === projectId ? { ...item, updatedAt: Date.now() } : item))); } catch (_) {}
-        location.href = './dashboard.html';
-      };
-      brand.addEventListener('click', (event) => {
-        event.preventDefault();
-        go();
-      });
+
+      brand.addEventListener('click', goDashboard);
       brand.addEventListener('keydown', (event) => {
         if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          go();
+          goDashboard(event);
         }
       });
     }
@@ -70,10 +82,20 @@
       let timer = null;
       titleInput.addEventListener('input', () => {
         clearTimeout(timer);
-        timer = setTimeout(() => updateMeta({ title: titleInput.value.trim() || 'Untitled Project' }), 250);
+        timer = setTimeout(() => updateMeta({
+          title: titleInput.value.trim() || 'Untitled Project'
+        }), 250);
       });
     }
   }
+
+  // Delegated capture handler: this works even when another Studio script
+  // installs click handlers on the sidebar before/after the project manager.
+  document.addEventListener('click', (event) => {
+    const brand = event.target?.closest?.('.sidebar .brand');
+    if (!brand) return;
+    goDashboard(event);
+  }, true);
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', wire, { once: true });
@@ -81,5 +103,5 @@
     wire();
   }
 
-  console.log('[Code Nest Project Manager] V0.4.8 ready', { projectId });
+  console.log('[Code Nest Project Manager] V0.4.8.1 ready', { projectId });
 })();
