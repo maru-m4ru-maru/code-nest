@@ -6,6 +6,12 @@
     document.write('<script src="preview-v4.js?v=42" data-code-nest-preview-v4><\\/script>');
   }
 
+  // Cells Sandbox is independent from Bash Sandbox. It controls only the
+  // sandbox state of Code Nest Preview iframes.
+  if (!document.querySelector('script[data-code-nest-cells-sandbox]')) {
+    document.write('<script src="cell-sandbox.js?v=47" data-code-nest-cells-sandbox><\\/script>');
+  }
+
   function setVersion() {
     document.querySelectorAll('.sidebar-footer span').forEach((el) => {
       if (/^V0\.3\.\d+$/i.test(el.textContent.trim()) || /^V0\.4\.\d+(?:\.\d+)?$/i.test(el.textContent.trim())) {
