@@ -8,14 +8,13 @@
     ready: false,
     loading: false,
     terminal: null,
+    terminalPromise: null,
     history: [],
-    historyIndex: -1
+    historyIndex: -1,
+    sandbox: localStorage.getItem("codeNest.bash.sandbox") !== "off"
   };
 
   // Compatibility guards for the current Studio markup/app.js.
-  // app.js expects a #toast element to exist and currently calls map() on
-  // the result of $('.cell'). Keep the fix local so the main app can be
-  // corrected later without breaking startup in the meantime.
   if (!document.getElementById("toast")) {
     const toast = document.createElement("div");
     toast.id = "toast";
@@ -62,29 +61,95 @@
     if (root) root.textContent = "";
   }
 
+  function sandboxLabel() {
+    return state.sandbox ? "🔒 Sandbox ON" : "⚠️ Sandbox OFF";
+  }
+
+  function updateSandboxButton() {
+    const button = document.getElementById("bashSandboxToggle");
+    if (!button) return;
+    button.textContent = sandboxLabel();
+    button.title = state.sandbox
+      ? "安全モード。クリックすると警告を表示してOFFにできます"
+      : "Sandbox OFF。クリックすると安全モードに戻します";
+    button.setAttribute("aria-pressed", String(!state.sandbox));
+    button.dataset.sandbox = state.sandbox ? "on" : "off";
+  }
+
+  function setSandboxMode(enabled, announce = true) {
+    state.sandbox = Boolean(enabled);
+    localStorage.setItem("codeNest.bash.sandbox", state.sandbox ? "on" : "off");
+    updateSandboxButton();
+
+    // A runtime may choose to inspect this flag before creating a terminal.
+    globalThis.__codeNestBashSandbox = state.sandbox;
+
+    if (announce) {
+      print(
+        state.sandbox
+          ? "[Sandbox] ON — browser sandbox policy is enabled."
+          : "[Sandbox] OFF — app-level restrictions are disabled. Browser/OS security boundaries still apply.",
+        state.sandbox ? "bash-system" : "bash-error"
+      );
+    }
+  }
+
+  function toggleSandbox() {
+    if (state.sandbox) {
+      const confirmed = window.confirm(
+        "SandboxをOFFにしますか？\n\n" +
+        "注意：OFFにするとCode Nest側の安全制限が弱くなります。" +
+        "信頼できないコードやパッケージを実行しないでください。\n\n" +
+        "※ これはブラウザ/OSのセキュリティ機構を無効化するものではありません。"
+      );
+      if (!confirmed) return;
+      setSandboxMode(false);
+      return;
+    }
+
+    setSandboxMode(true);
+  }
+
+  function ensureSandboxButton() {
+    const existing = document.getElementById("bashSandboxToggle");
+    if (existing) {
+      updateSandboxButton();
+      return existing;
+    }
+
+    const actions = document.querySelector(".bash-head-actions");
+    if (!actions) return null;
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.id = "bashSandboxToggle";
+    button.className = "bash-btn sandbox-toggle";
+    button.addEventListener("click", toggleSandbox);
+    actions.insertBefore(button, actions.lastElementChild || null);
+    updateSandboxButton();
+    return button;
+  }
+
   async function loadRuntime() {
     if (state.ready) return state.terminal;
     if (state.loading) return state.terminalPromise;
 
     state.loading = true;
     state.terminalPromise = (async () => {
-      /*
-       * WebContainer/Wasmer-style browser runtimes cannot be safely assumed
-       * to exist globally. Keep this bridge deliberately small: if a runtime
-       * is supplied by a later bundle, Code Nest can attach it through
-       * window.CodeNestBashRuntime.
-       */
+      globalThis.__codeNestBashSandbox = state.sandbox;
+
       if (window.CodeNestBashRuntime &&
           typeof window.CodeNestBashRuntime.create === "function") {
-        state.terminal = await window.CodeNestBashRuntime.create();
+        state.terminal = await window.CodeNestBashRuntime.create({
+          sandbox: state.sandbox
+        });
         state.ready = true;
         return state.terminal;
       }
 
-      // No runtime bundle installed yet. Provide a real shell-compatible
-      // command layer for the browser filesystem instead of pretending that
-      // arbitrary host commands are executable.
-      state.terminal = new BrowserShell();
+      // No runtime bundle installed yet. Provide a shell-compatible browser
+      // command layer. This remains inside the browser regardless of the UI toggle.
+      state.terminal = new BrowserShell(state.sandbox);
       state.ready = true;
       return state.terminal;
     })();
@@ -93,7 +158,8 @@
   }
 
   class BrowserShell {
-    constructor() {
+    constructor(sandbox = true) {
+      this.sandbox = sandbox;
       this.cwd = "/";
       this.files = new Map([
         ["/README.txt", "Code Nest browser filesystem\n"]
@@ -123,7 +189,9 @@
         case "echo": return arg;
         case "pwd": return this.cwd;
         case "whoami": return "coder";
-        case "uname": return "Code Nest WASM browser environment";
+        case "uname": return this.sandbox
+          ? "Code Nest WASM browser environment (sandboxed)"
+          : "Code Nest WASM browser environment (sandbox disabled at app level)";
         case "ls": {
           const prefix = this.cwd.replace(/\/$/, "") + "/";
           const names = new Set();
@@ -150,7 +218,6 @@
           return "";
         }
         case "mkdir": {
-          // Directory entries are implicit in this browser filesystem.
           return "";
         }
         case "clear": clear(); return "";
@@ -173,9 +240,6 @@
     state.historyIndex = -1;
 
     try {
-      // pip is provided by Code Nest's Pyodide/micropip bridge, not by
-      // the shell runtime itself. Route pip install commands here so the
-      // Bash console and Terminal cells use the same package environment.
       const pipMatch = cmd.match(/^(?:pip|python\s+-m\s+pip|python3\s+-m\s+pip|py\s+-m\s+pip)\s+install\s+(.+)$/i);
       if (pipMatch && typeof window.codeNestPipInstall === "function") {
         const result = await window.codeNestPipInstall(pipMatch[1].trim().split(/\s+/));
@@ -196,15 +260,18 @@
   }
 
   function wire() {
-    // app.js is the single owner of the Bash modal controls.
-    // Keeping listeners here would execute every command twice.
+    ensureSandboxButton();
     status();
+    globalThis.__codeNestBashSandbox = state.sandbox;
+    updateSandboxButton();
   }
 
   window.CodeNestBash = {
     init: wire,
     run: runCommand,
-    loadRuntime
+    loadRuntime,
+    getSandbox: () => state.sandbox,
+    setSandboxMode
   };
 
   if (document.readyState === "loading") {
@@ -212,4 +279,7 @@
   } else {
     wire();
   }
+
+  setTimeout(ensureSandboxButton, 0);
+  setTimeout(ensureSandboxButton, 250);
 })();
