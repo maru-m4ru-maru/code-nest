@@ -1,4 +1,4 @@
-/* Code Nest Project Notebook Store V0.6.0 */
+/* Code Nest Project Notebook Store V0.6.1 */
 (() => {
   'use strict';
 
@@ -137,18 +137,17 @@
   }
 
   async function restoreNotebook() {
+    const stored = await get(NOTEBOOKS, projectId);
+    const notebook = stored && Array.isArray(stored.cells)
+      ? stored
+      : { title: (await ensureProject()).title || 'Untitled Project', cells: clone(starter) };
+
+    const cellsRoot = document.getElementById('cells');
+    if (!cellsRoot) return;
+
+    restoring = true;
     try {
-      const stored = await get(NOTEBOOKS, projectId);
-      const notebook = stored && Array.isArray(stored.cells)
-        ? stored
-        : { title: (await ensureProject()).title || 'Untitled Project', cells: clone(starter) };
-
-      const cellsRoot = document.getElementById('cells');
-      if (!cellsRoot) return;
-
-      restoring = true;
       cellsRoot.querySelectorAll('.cell').forEach((cell) => cell.remove());
-
       for (const saved of notebook.cells) {
         const type = saved.type === 'markdown' ? 'markdown' : saved.type === 'terminal' ? 'terminal' : 'code';
         let cell = null;
@@ -186,6 +185,16 @@
     }
   }, true);
 
+  // Save as early as possible when leaving the project, especially when
+  // clicking the Studio brand button that immediately navigates to Dashboard.
+  document.addEventListener('pointerdown', (event) => {
+    if (restoring) return;
+    if (event.target?.closest?.('.sidebar .brand')) {
+      clearTimeout(saveTimer);
+      void saveNow();
+    }
+  }, true);
+
   window.addEventListener('pagehide', () => { void saveNow(); });
   window.addEventListener('beforeunload', () => { void saveNow(); });
 
@@ -196,7 +205,7 @@
       if (state) state.textContent = '保存済み';
       const storage = document.getElementById('storageState');
       if (storage) storage.textContent = 'IndexedDB';
-      console.log('[Code Nest Project Notebook] V0.6.0 ready', { projectId });
+      console.log('[Code Nest Project Notebook] V0.6.1 ready', { projectId });
     } catch (error) {
       console.error('[Code Nest Project Notebook] startup failed', error);
     }
