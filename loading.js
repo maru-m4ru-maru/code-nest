@@ -1,4 +1,4 @@
-// Code Nest runtime loader V0.6.3
+// Code Nest runtime loader V0.6.4
 (() => {
   'use strict';
 
@@ -28,7 +28,7 @@
   function setVersion() {
     document.querySelectorAll('.sidebar-footer span').forEach((el) => {
       if (/^V0\.3\.\d+$/i.test(el.textContent.trim()) || /^V0\.4\.\d+(?:\.\d+)?$/i.test(el.textContent.trim()) || /^V0\.5\.\d+(?:\.\d+)?$/i.test(el.textContent.trim()) || /^V0\.6\.\d+(?:\.\d+)?$/i.test(el.textContent.trim())) {
-        el.textContent = 'V0.6.3';
+        el.textContent = 'V0.6.4';
       }
     });
   }
@@ -96,7 +96,7 @@
       box.addEventListener('click', (event) => { if (event.target === box) box.remove(); });
       button.textContent = '✓ 共有済み';
     } catch (error) {
-      console.error('[Code Nest Share V0.6.3] FAILED', error);
+      console.error('[Code Nest Share V0.6.4] FAILED', error);
       alert(`共有に失敗しました\n${error?.message || error}`);
       button.innerHTML = original;
     } finally {
@@ -114,11 +114,8 @@
     runShareDirect(button);
   }, true);
 
-  // Studio per-cell Preview must preview by file type.
-  // app.js routes the generic preview action through runCodeCell(),
-  // which is correct for HTML/CSS/JS execution but sends Python files
-  // to the Python runner. Capture the preview click first and route it
-  // explicitly without replacing the existing app.js implementation.
+  // Studio per-cell Preview must not fall through to app.js's generic action handler.
+  // Route HTML/CSS/JS preview clicks directly to the existing runtime functions.
   document.addEventListener('click', (event) => {
     const button = event.target?.closest?.('.cell .preview-icon');
     if (!button) return;
@@ -139,23 +136,29 @@
     }
 
     if (name.endsWith('.html') || name.endsWith('.htm')) {
-      if (typeof window.previewCodeCell === 'function') {
-        window.previewCodeCell(cell);
-      } else if (window.CodeNestPreviewV4?.open) {
-        window.CodeNestPreviewV4.open('studio');
+      if (typeof window.CodeNestPreviewV4?.open === 'function') {
+        window.CodeNestPreviewV4.open('studio-cell-preview');
+      } else if (typeof window.showToast === 'function') {
+        window.showToast('プレビューモジュールを読み込み中です。少し待ってからもう一度お試しください');
       }
       return;
     }
 
     if (name.endsWith('.css')) {
-      if (typeof window.previewAssetCell === 'function') window.previewAssetCell(cell, 'css');
-      else if (typeof window.showToast === 'function') window.showToast('CSSプレビュー機能を読み込めませんでした');
+      if (typeof window.previewAssetCell === 'function') {
+        window.previewAssetCell(cell, 'css');
+      } else if (typeof window.showToast === 'function') {
+        window.showToast('CSSプレビュー機能を読み込めませんでした');
+      }
       return;
     }
 
     if (name.endsWith('.js') || name.endsWith('.mjs')) {
-      if (typeof window.previewAssetCell === 'function') window.previewAssetCell(cell, 'js');
-      else if (typeof window.showToast === 'function') window.showToast('JavaScriptプレビュー機能を読み込めませんでした');
+      if (typeof window.previewAssetCell === 'function') {
+        window.previewAssetCell(cell, 'js');
+      } else if (typeof window.showToast === 'function') {
+        window.showToast('JavaScriptプレビュー機能を読み込めませんでした');
+      }
       return;
     }
 
@@ -181,7 +184,7 @@
       }
       if (typeof window.showToast === 'function') window.showToast('コードセルをすべて実行しました');
     } catch (error) {
-      console.error('[Code Nest RunAll V0.6.3] FAILED', error);
+      console.error('[Code Nest RunAll V0.6.4] FAILED', error);
       if (typeof window.showToast === 'function') window.showToast('すべて実行中にエラーが発生しました');
     } finally {
       button.disabled = false; button.dataset.runAllBusy = '0'; button.innerHTML = original;
@@ -202,5 +205,5 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
   else boot();
 
-  console.log('[Code Nest] runtime loader V0.6.3 ready');
+  console.log('[Code Nest] runtime loader V0.6.4 ready');
 })();
