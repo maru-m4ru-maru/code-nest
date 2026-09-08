@@ -8,67 +8,32 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
-<style>
-:root{--bg:#f4f6fb;--surface:#fff;--line:#e1e5ee;--text:#172033;--muted:#7b8495;--accent:#5b5ce2;--accent2:#7b61ff}
-*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 0 0,#eef1ff 0,transparent 34%),linear-gradient(180deg,var(--bg),#eef1f7);color:var(--text);font-family:"Noto Sans JP",Inter,system-ui,sans-serif}.wrap{width:min(1120px,calc(100% - 32px));margin:auto}.top{height:74px;display:flex;align-items:center;justify-content:space-between}.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit}.logo{width:42px;height:42px;border-radius:13px;background:#eef1ff;border:1px solid #dbe0ff;padding:5px}.brand strong{display:block;font:800 16px Inter}.brand small{display:block;color:var(--muted);font-size:10px;margin-top:-2px}.back{border:1px solid var(--line);background:var(--surface);color:#49546a;border-radius:11px;padding:9px 13px;font-weight:700;cursor:pointer}.hero{padding:44px 0 22px;display:flex;align-items:end;justify-content:space-between;gap:18px}.hero h1{margin:0 0 6px;font:800 34px/1.15 Inter,"Noto Sans JP"}.hero p{margin:0;color:var(--muted);font-size:13px}.new{padding:11px 16px;border:0;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;font-weight:800;cursor:pointer;box-shadow:0 12px 30px #5b5ce220}.projects{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;padding:18px 0 60px}.card{background:rgba(255,255,255,.92);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 12px 30px rgba(30,42,70,.05)}.icon{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:#eef1ff;color:#5b5ce2;font-weight:800;font-size:15px}.name{margin:15px 0 4px;font:800 17px Inter,"Noto Sans JP";white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.meta{font-size:11px;color:var(--muted);min-height:20px}.actions{display:flex;gap:8px;margin-top:16px}.open{flex:1;border:0;border-radius:10px;padding:9px 10px;background:#1f2a44;color:#fff;font-weight:800;cursor:pointer}.del{border:1px solid #e3c7cf;background:#fff6f8;color:#9b425d;border-radius:10px;padding:9px 11px;font-weight:700;cursor:pointer}.empty{grid-column:1/-1;padding:58px 18px;text-align:center;border:1px dashed #cfd5e3;border-radius:18px;color:var(--muted);background:#ffffff90}.empty strong{display:block;color:#556074;font-size:15px;margin-bottom:6px}@media(max-width:840px){.projects{grid-template-columns:repeat(2,1fr)}}@media(max-width:560px){.wrap{width:calc(100% - 24px)}.hero{display:block}.new{margin-top:16px}.projects{grid-template-columns:1fr}.hero h1{font-size:29px}}
-</style>
+<link rel="stylesheet" href="dashboard.css?v=49">
 </head>
 <body>
 <header class="wrap top">
-<a class="brand" href="./">
-<svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><path d="M31 10c-9 0-9 6-9 6v8h15v3H19c-9 0-9 8-9 8s0 9 9 9h6v-6h-7c-3 0-3-4 0-4h20c4 0 7-3 7-7V19c0-5-5-9-14-9Z" fill="#16b9ff"/><path d="M37 54c9 0 9-6 9-6v-8H31v-3h18c9 0 9-8 9-8s0-9-9-9h-6v6h7c3 0 3 4 0 4H30c-4 0-7 3-7 7v8c0 5 5 9 14 9Z" fill="#078bd7"/></svg>
-<span><strong>Code Nest</strong><small>Notebook Studio · Dashboard</small></span>
-</a>
-<button class="back" id="studioBtn">Studioを開く</button>
+  <a class="brand" href="./">
+    <svg class="logo" viewBox="0 0 64 64" aria-hidden="true"><path d="M31 10c-9 0-9 6-9 6v8h15v3H19c-9 0-9 8-9 8s0 9 9 9h6v-6h-7c-3 0-3-4 0-4h20c4 0 7-3 7-7V19c0-5-5-9-14-9Z" fill="#16b9ff"/><path d="M37 54c9 0 9-6 9-6v-8H31v-3h18c9 0 9-8-9-8s0-9 9-9h-6v6h7c3 0 3 4 0 4H30c-4 0-7 3-7 7v8c0 5 5 9 14 9Z" fill="#078bd7"/></svg>
+    <span><strong>Code Nest</strong><small>Notebook Studio · Dashboard</small></span>
+  </a>
+  <button class="back" id="studioBtn">Studioを開く</button>
 </header>
 <main class="wrap">
-<section class="hero"><div><h1>Dashboard</h1><p>プロジェクトを選んで、続きを開こう。</p></div><button class="new" id="newProject">＋ 新しいプロジェクト</button></section>
-<section class="projects" id="projects"></section>
+  <section class="hero">
+    <div><h1>Dashboard</h1><p>プロジェクトを選んで、続きを開こう。</p></div>
+    <div class="hero-actions"><button class="new" id="newProject">＋ 新しいプロジェクト</button></div>
+  </section>
+  <section class="toolbar" aria-label="プロジェクト操作">
+    <input id="projectSearch" class="search" type="search" placeholder="プロジェクトを検索…" autocomplete="off">
+    <select id="projectSort" class="sort" aria-label="並び順">
+      <option value="order">カスタム順</option>
+      <option value="updated">最終更新順</option>
+      <option value="name">名前順</option>
+    </select>
+  </section>
+  <section class="projects" id="projects" aria-label="プロジェクト一覧"></section>
 </main>
-<script>
-(() => {
-  'use strict';
-  const META_KEY='codeNest.projects.v1';
-  const PREFIX='codeNest.project.';
-  const root=document.getElementById('projects');
-  const esc=(s)=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-  const read=()=>{try{const v=localStorage.getItem(META_KEY);const a=v?JSON.parse(v):[];return Array.isArray(a)?a:[]}catch{return[]}};
-  const write=(a)=>localStorage.setItem(META_KEY,JSON.stringify(a));
-  const niceDate=(ts)=>{try{return new Date(ts).toLocaleString('ja-JP',{year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})}catch{return''}};
-  const makeId=()=>`p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2,8)}`;
-  function render(){
-    const list=read().sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
-    if(!list.length){root.innerHTML='<div class="empty"><strong>まだプロジェクトがありません</strong>「新しいプロジェクト」から最初のNotebookを作ろう。</div>';return}
-    root.innerHTML=list.map((p)=><article class="card"><div class="icon">CN</div><div class="name" title="${esc(p.title||'Untitled Project')}">${esc(p.title||'Untitled Project')}</div><div class="meta">最終更新 ${esc(niceDate(p.updatedAt||p.createdAt||Date.now()))}</div><div class="actions"><button class="open" data-open="${esc(p.id)}">開く</button><button class="del" data-delete="${esc(p.id)}">削除</button></div></article>').join('');
-  }
-  function create(){
-    const id=makeId();
-    const now=Date.now();
-    const list=read();
-    list.push({id,title:'Untitled Project',createdAt:now,updatedAt:now});
-    write(list);
-    location.href=`./studio.html?project=${encodeURIComponent(id)}&name=${encodeURIComponent('Untitled Project')}`;
-  }
-  root.addEventListener('click',(e)=>{
-    const open=e.target.closest('[data-open]');
-    const del=e.target.closest('[data-delete]');
-    if(open){location.href=`./studio.html?project=${encodeURIComponent(open.dataset.open)}`;return}
-    if(del){
-      const id=del.dataset.delete;
-      const p=read().find(x=>x.id===id);
-      if(!p)return;
-      if(!confirm(`「${p.title||'Untitled Project'}」を削除しますか？\nこのブラウザに保存されたプロジェクトデータも削除されます。`))return;
-      const list=read().filter(x=>x.id!==id);
-      write(list);
-      localStorage.removeItem(`${PREFIX}${id}.notebook`);
-      localStorage.removeItem(`${PREFIX}${id}.fs`);
-      render();
-    }
-  });
-  document.getElementById('newProject').addEventListener('click',create);
-  document.getElementById('studioBtn').addEventListener('click',()=>location.href='./studio.html');
-  render();
-})();
-</script>
+<div class="toast" id="dashboardToast" role="status" aria-live="polite"></div>
+<script src="dashboard.js?v=49"></script>
 </body>
 </html>
