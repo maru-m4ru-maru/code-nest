@@ -16,12 +16,12 @@ h1{margin:22px 0 8px;font-size:28px;letter-spacing:-.03em}.lead{margin:0;color:v
 .warning{margin:18px 0;padding:16px;border:1px solid #8f6f3d;border-radius:14px;background:#2a2116;color:#f6dfa9;font-size:13px;line-height:1.8;white-space:pre-wrap}
 .urlbox{padding:12px;border:1px solid var(--line);border-radius:12px;background:#ffffff05;color:#aebdc5;font:11px/1.6 ui-monospace,monospace;word-break:break-all}
 .controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:16px}
-button{font:inherit}.btn{border:1px solid var(--line);background:#ffffff08;color:var(--text);border-radius:11px;padding:10px 14px;cursor:pointer;font-weight:700}.btn.primary{background:linear-gradient(135deg,var(--blue),#078bd7);border-color:transparent;color:#03131d}.btn.warn{border-color:#80513a;background:#341d18;color:#ffd9c0}
+button{font:inherit}.btn{border:1px solid var(--line);background:#ffffff08;color:var(--text);border-radius:11px;padding:10px 14px;cursor:pointer;font-weight:700}.btn.primary{background:linear-gradient(135deg,var(--blue),#078bd7);border-color:transparent;color:#03131d}.btn.warn{border-color:#80513a;background:#341d18;color:#ffd9c0}.btn:disabled{opacity:.5;cursor:not-allowed}
 .status{margin-left:auto;padding:8px 10px;border:1px solid var(--line);border-radius:10px;font-size:12px;color:#c6d4db}.status.off{color:#ffb7b7;border-color:#713f46;background:#321b20}
 iframe{display:none;width:100%;height:82vh;border:1px solid var(--line);border-radius:18px;background:#fff;box-shadow:0 25px 80px #0008}
 iframe.visible{display:block}.hidden{display:none!important}
 .back{margin-top:12px;text-align:center;color:#6f8793;font-size:10px}
-.invalid{max-width:620px;margin:15vh auto 0}
+.error{margin-top:16px;padding:12px;border:1px solid #713f46;border-radius:12px;background:#321b20;color:#ffb7b7;font-size:12px;line-height:1.6;white-space:pre-wrap}
 @media(max-width:620px){.card{margin-top:4vh;padding:20px}h1{font-size:24px}.status{margin-left:0}.controls{align-items:stretch}.controls .btn{flex:1}}
 </style>
 </head>
@@ -32,13 +32,14 @@ iframe.visible{display:block}.hidden{display:none!important}
     <h1>このプレビューを実行しますか？</h1>
     <p class="lead">共有されたコードがブラウザで実行されます。意味の分からないコードは実行しないでください。</p>
     <div class="warning" id="warningText"></div>
-    <div class="urlbox" id="previewUrl"></div>
+    <div class="urlbox" id="codeUrl"></div>
     <div class="controls">
       <button class="btn" id="sandboxToggle" type="button">SandboxをOFF</button>
       <button class="btn primary" id="runButton" type="button">▶ 実行</button>
       <span class="status" id="sandboxStatus">Sandbox ON</span>
     </div>
     <div class="back">実行しない場合は、このページを閉じてください。</div>
+    <div class="error hidden" id="errorBox"></div>
   </section>
 
   <iframe id="previewFrame" title="Code Nest Shared Preview" referrerpolicy="no-referrer"></iframe>
@@ -50,7 +51,8 @@ iframe.visible{display:block}.hidden{display:none!important}
   const params = new URLSearchParams(location.search);
   const id = String(params.get('id') || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80);
   const workerOrigin = 'https://code-nest-worker.maru-0727.workers.dev';
-  const previewUrl = id ? `${workerOrigin}/share/${encodeURIComponent(id)}?view=preview` : '';
+  const dataUrl = id ? `${workerOrigin}/share/${encodeURIComponent(id)}?view=data` : '';
+  const codeUrl = id ? `${workerOrigin}/share/${encodeURIComponent(id)}?view=code` : '';
 
   const WARNING =
     '意味の分からないコードは「絶対に」SandboxOFFで実行しないでください。\n\n' +
@@ -59,16 +61,17 @@ iframe.visible{display:block}.hidden{display:none!important}
 
   const card = document.getElementById('confirmCard');
   const warning = document.getElementById('warningText');
-  const urlEl = document.getElementById('previewUrl');
+  const codeUrlEl = document.getElementById('codeUrl');
   const toggle = document.getElementById('sandboxToggle');
   const run = document.getElementById('runButton');
   const status = document.getElementById('sandboxStatus');
   const frame = document.getElementById('previewFrame');
+  const errorBox = document.getElementById('errorBox');
 
   let sandboxEnabled = localStorage.getItem('codeNest.sharedPreview.sandbox') !== 'off';
 
   warning.textContent = WARNING;
-  urlEl.textContent = previewUrl || '無効な共有プレビューです。';
+  codeUrlEl.textContent = codeUrl || '無効な共有プレビューです。';
 
   function updateUI(){
     status.textContent = sandboxEnabled ? 'Sandbox ON' : 'Sandbox OFF';
@@ -80,6 +83,65 @@ iframe.visible{display:block}.hidden{display:none!important}
     return window.confirm(WARNING + '\n\nSandbox OFFで実行しますか？');
   }
 
+  function showError(message){
+    errorBox.textContent = message;
+    errorBox.classList.remove('hidden');
+  }
+
+  function escapeAttr(value){
+    return String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+  }
+
+  function normaliseCells(data){
+    if (!data || !Array.isArray(data.cells)) return [];
+    return data.cells.map(cell => ({
+      type: String(cell?.type || 'code'),
+      source: String(cell?.source || ''),
+      output: String(cell?.output || '')
+    }));
+  }
+
+  function buildPreviewHtml(data){
+    const cells = normaliseCells(data);
+    const htmlCell = cells.find(cell => {
+      const source = cell.source;
+      return /<html\b/i.test(source) || /<!doctype\s+html/i.test(source) || /<body\b/i.test(source);
+    });
+
+    if (!htmlCell){
+      return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Code Nest Preview</title><style>body{margin:0;font-family:system-ui,sans-serif;background:#f2f4fb;color:#172033}.empty{min-height:100vh;display:grid;place-items:center;padding:24px}.card{background:#fff;border:1px solid #e3e7f0;border-radius:18px;padding:28px;max-width:520px;box-shadow:0 12px 40px rgba(31,41,55,.08)}</style></head><body><div class="empty"><div class="card"><h2>プレビューできるHTMLがありません</h2><p>HTML / CSS / JavaScript を含むコードセルを共有してください。</p></div></div></body></html>`;
+    }
+
+    let source = htmlCell.source;
+
+    if (!/<!doctype\s+html/i.test(source) && !/<html\b/i.test(source)) {
+      source = `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeAttr(data.title || 'Code Nest Preview')}</title></head><body>${source}</body></html>`;
+    }
+
+    // Add CSS cells before </head> and JS cells before </body>.
+    const css = cells
+      .filter(cell => cell.type === 'css')
+      .map(cell => `<style>${cell.source}</style>`)
+      .join('');
+
+    const js = cells
+      .filter(cell => cell.type === 'javascript' || cell.type === 'js')
+      .map(cell => `<script>${cell.source}<\/script>`)
+      .join('');
+
+    if (css){
+      if (/<\/head>/i.test(source)) source = source.replace(/<\/head>/i, css + '</head>');
+      else source = source.replace(/<body\b([^>]*)>/i, `<head>${css}</head><body$1>`);
+    }
+
+    if (js){
+      if (/<\/body>/i.test(source)) source = source.replace(/<\/body>/i, js + '</body>');
+      else source += js;
+    }
+
+    return source;
+  }
+
   toggle.addEventListener('click', () => {
     if (sandboxEnabled && !confirmOff()) return;
     sandboxEnabled = !sandboxEnabled;
@@ -87,18 +149,47 @@ iframe.visible{display:block}.hidden{display:none!important}
     updateUI();
   });
 
-  run.addEventListener('click', () => {
-    if (!previewUrl) return;
+  run.addEventListener('click', async () => {
+    if (!dataUrl) return;
     if (!sandboxEnabled && !confirmOff()) return;
-    frame.removeAttribute('sandbox');
-    if (sandboxEnabled) frame.setAttribute('sandbox', 'allow-scripts');
-    frame.src = previewUrl;
-    frame.classList.add('visible');
-    card.classList.add('hidden');
+
+    run.disabled = true;
+    toggle.disabled = true;
+    errorBox.classList.add('hidden');
+
+    try {
+      const response = await fetch(dataUrl, {
+        method: 'GET',
+        headers: { 'Accept': 'application/json' },
+        cache: 'no-store'
+      });
+
+      if (!response.ok) {
+        throw new Error(`共有データの取得に失敗しました (${response.status})`);
+      }
+
+      const data = await response.json();
+      const previewHtml = buildPreviewHtml(data);
+
+      frame.removeAttribute('sandbox');
+      if (sandboxEnabled) frame.setAttribute('sandbox', 'allow-scripts');
+
+      frame.srcdoc = previewHtml;
+      frame.classList.add('visible');
+      card.classList.add('hidden');
+    } catch (error) {
+      showError(String(error?.message || error));
+      run.disabled = false;
+      toggle.disabled = false;
+    }
   });
 
   updateUI();
-  if (!previewUrl) { toggle.disabled = true; run.disabled = true; }
+  if (!dataUrl){
+    toggle.disabled = true;
+    run.disabled = true;
+    showError('共有IDがありません。正しい共有プレビューURLを開いてください。');
+  }
 })();
 </script>
 </body>
