@@ -1,16 +1,22 @@
-// Code Nest runtime loader V0.4.3
+// Code Nest runtime loader V0.4.4
 (() => {
   'use strict';
 
-  // Preview is isolated in preview-v4.js. Keep it untouched.
+  // Keep Preview and the existing Studio features untouched.
   if (!document.querySelector('script[data-code-nest-preview-v4]')) {
     document.write('<script src="preview-v4.js?v=40" data-code-nest-preview-v4><\\/script>');
+  }
+
+  // Load only the Bash -> pip bridge here. It intercepts pip install commands
+  // before the generic Bash runtime can reject package-manager commands.
+  if (!document.querySelector('script[data-code-nest-bash-pip-fix]')) {
+    document.write('<script src="bash-pip-fix.js?v=44" data-code-nest-bash-pip-fix><\\/script>');
   }
 
   function setVersion() {
     document.querySelectorAll('.sidebar-footer span').forEach((el) => {
       if (/^V0\.3\.\d+$/i.test(el.textContent.trim()) || /^V0\.4\.\d+$/i.test(el.textContent.trim())) {
-        el.textContent = 'V0.4.3';
+        el.textContent = 'V0.4.4';
       }
     });
   }
@@ -87,7 +93,7 @@
     }
   }
 
-  // Capture phase is intentionally attached here so Share cannot be blocked by another listener.
+  // Keep the known-working Share path isolated from the pip fix.
   document.addEventListener('click', (event) => {
     const button = event.target?.closest?.('#shareBtn');
     if (!button) return;
@@ -100,20 +106,16 @@
 
   async function runAllDirect(button) {
     if (!button || button.dataset.runAllBusy === '1') return;
-
     const codeCells = [...document.querySelectorAll('.cell[data-type="code"]')];
     console.log('[Code Nest RunAll V0.4.3] START', { cells: codeCells.length });
-
     if (!codeCells.length) {
       if (typeof window.showToast === 'function') window.showToast('実行するコードセルがありません');
       return;
     }
-
     button.dataset.runAllBusy = '1';
     const original = button.innerHTML;
     button.disabled = true;
     button.textContent = '⏳ 実行中…';
-
     try {
       for (let i = 0; i < codeCells.length; i += 1) {
         const cell = codeCells[i];
@@ -134,7 +136,6 @@
     }
   }
 
-  // Capture phase replaces only the broken toolbar Run All path.
   document.addEventListener('click', (event) => {
     const button = event.target?.closest?.('#runAllBtn');
     if (!button) return;
@@ -151,5 +152,5 @@
     setVersion();
   }
 
-  console.log('[Code Nest] runtime loader V0.4.3 ready');
+  console.log('[Code Nest] runtime loader V0.4.4 ready');
 })();
