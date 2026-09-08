@@ -114,7 +114,6 @@
         updatedAt: now
       });
 
-      // Dashboard uses this metadata list, so Studio and Dashboard stay in sync.
       const list = readProjectMeta();
       const index = list.findIndex((item) => item && item.id === projectId);
       if (index >= 0) {
@@ -190,6 +189,13 @@
     }
   }
 
+  function legacyOwnerId() {
+    const list = readProjectMeta().filter((item) => item && item.id);
+    if (!list.length) return projectId;
+    list.sort((a, b) => (a.order ?? Number.MAX_SAFE_INTEGER) - (b.order ?? Number.MAX_SAFE_INTEGER) || (a.createdAt || 0) - (b.createdAt || 0));
+    return list[0].id;
+  }
+
   async function bootstrap() {
     if (!('indexedDB' in window)) return;
     try {
@@ -197,10 +203,12 @@
       if (stored) {
         await restoreNotebook(stored);
       } else {
-        const scopedKey = `${PROJECT_PREFIX}${projectId}.notebook`;
-        const local = readLocal(scopedKey) || (projectId === 'default' ? readLocal(OLD_NOTEBOOK_KEY) : null);
-        const fallback = local && Array.isArray(local.cells)
-          ? local
+        // Legacy LocalStorage never contained a reliable project ID. Migrate it
+        // only to the oldest project; every other project starts independently.
+        const owner = legacyOwnerId();
+        const legacy = projectId === owner ? (readLocal(`${PROJECT_PREFIX}${projectId}.notebook`) || readLocal(OLD_NOTEBOOK_KEY)) : null;
+        const fallback = legacy && Array.isArray(legacy.cells)
+          ? legacy
           : { title: document.getElementById('titleInput')?.value || 'Untitled Project', cells: starter };
         await put(NOTEBOOK_STORE, { id: projectId, ...fallback, updatedAt: Date.now() });
         lastSavedSignature = signature(fallback);
