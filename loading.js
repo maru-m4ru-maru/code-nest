@@ -1,4 +1,4 @@
-// Code Nest runtime loader V0.5.6
+// Code Nest runtime loader V0.5.7
 (() => {
   'use strict';
 
@@ -10,19 +10,19 @@
     document.write('<script src="cell-sandbox.js?v=47" data-code-nest-cells-sandbox><\\/script>');
   }
 
-  // IndexedDB is authoritative. Load the async store first and the
-  // synchronous per-project bridge immediately after it, both BEFORE app.js.
+  // IndexedDB is authoritative. Load the async project store and then the
+  // synchronous project-local runtime bridge BEFORE app.js.
   if (!document.querySelector('script[data-code-nest-project-idb]')) {
-    document.write('<script src="project-idb.js?v=56" data-code-nest-project-idb><\\/script>');
+    document.write('<script src="project-idb.js?v=57" data-code-nest-project-idb><\\/script>');
   }
   if (!document.querySelector('script[data-code-nest-project-idb-runtime]')) {
-    document.write('<script src="project-idb-runtime.js?v=56" data-code-nest-project-idb-runtime><\\/script>');
+    document.write('<script src="project-idb-runtime.js?v=57" data-code-nest-project-idb-runtime><\\/script>');
   }
 
   function setVersion() {
     document.querySelectorAll('.sidebar-footer span').forEach((el) => {
       if (/^V0\.3\.\d+$/i.test(el.textContent.trim()) || /^V0\.4\.\d+(?:\.\d+)?$/i.test(el.textContent.trim()) || /^V0\.5\.\d+(?:\.\d+)?$/i.test(el.textContent.trim())) {
-        el.textContent = 'V0.5.6';
+        el.textContent = 'V0.5.7';
       }
     });
   }
@@ -48,9 +48,7 @@
       const data = shareSnapshot();
       if (!data.cells.length) throw new Error('共有するセルがありません');
       const response = await fetch(`${API}/share`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data)
       });
       if (!response.ok) {
         const detail = await response.text().catch(() => '');
@@ -79,7 +77,7 @@
       box.addEventListener('click', (event) => { if (event.target === box) box.remove(); });
       button.textContent = '✓ 共有済み';
     } catch (error) {
-      console.error('[Code Nest Share V0.5.6] FAILED', error);
+      console.error('[Code Nest Share V0.5.7] FAILED', error);
       alert(`共有に失敗しました\n${error?.message || error}`);
       button.innerHTML = original;
     } finally {
@@ -93,9 +91,7 @@
   document.addEventListener('click', (event) => {
     const button = event.target?.closest?.('#shareBtn');
     if (!button) return;
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation();
+    event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation();
     runShareDirect(button);
   }, true);
 
@@ -108,8 +104,7 @@
     }
     button.dataset.runAllBusy = '1';
     const original = button.innerHTML;
-    button.disabled = true;
-    button.textContent = '⏳ 実行中…';
+    button.disabled = true; button.textContent = '⏳ 実行中…';
     try {
       for (const cell of codeCells) {
         if (typeof window.runCodeCell !== 'function') throw new Error('runCodeCell is not available');
@@ -117,29 +112,22 @@
       }
       if (typeof window.showToast === 'function') window.showToast('コードセルをすべて実行しました');
     } catch (error) {
-      console.error('[Code Nest RunAll V0.5.6] FAILED', error);
+      console.error('[Code Nest RunAll V0.5.7] FAILED', error);
       if (typeof window.showToast === 'function') window.showToast('すべて実行中にエラーが発生しました');
     } finally {
-      button.disabled = false;
-      button.dataset.runAllBusy = '0';
-      button.innerHTML = original;
+      button.disabled = false; button.dataset.runAllBusy = '0'; button.innerHTML = original;
     }
   }
 
   document.addEventListener('click', (event) => {
     const button = event.target?.closest?.('#runAllBtn');
     if (!button) return;
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation();
+    event.preventDefault(); event.stopPropagation(); event.stopImmediatePropagation();
     runAllDirect(button);
   }, true);
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', setVersion, { once: true });
-  } else {
-    setVersion();
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setVersion, { once: true });
+  else setVersion();
 
-  console.log('[Code Nest] runtime loader V0.5.6 ready');
+  console.log('[Code Nest] runtime loader V0.5.7 ready');
 })();
