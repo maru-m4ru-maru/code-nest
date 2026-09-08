@@ -1,4 +1,4 @@
-// Code Nest runtime loader V0.4.5
+// Code Nest runtime loader V0.4.5.1
 (() => {
   'use strict';
 
@@ -7,16 +7,14 @@
     document.write('<script src="preview-v4.js?v=40" data-code-nest-preview-v4><\\/script>');
   }
 
-  // Load only the Bash -> pip bridge here. It intercepts pip install commands
-  // before the generic Bash runtime can reject package-manager commands.
-  if (!document.querySelector('script[data-code-nest-bash-pip-fix]')) {
-    document.write('<script src="bash-pip-fix.js?v=45" data-code-nest-bash-pip-fix><\\/script>');
-  }
+  // IMPORTANT: bash-pip-fix.js is loaded directly by studio.html AFTER pip.js
+  // and bash-wasm.js. Loading it here would run it before codeNestPipInstall
+  // exists, causing a false "pip bridge is not ready" error.
 
   function setVersion() {
     document.querySelectorAll('.sidebar-footer span').forEach((el) => {
-      if (/^V0\.3\.\d+$/i.test(el.textContent.trim()) || /^V0\.4\.\d+$/i.test(el.textContent.trim())) {
-        el.textContent = 'V0.4.5';
+      if (/^V0\.3\.\d+$/i.test(el.textContent.trim()) || /^V0\.4\.\d+(?:\.\d+)?$/i.test(el.textContent.trim())) {
+        el.textContent = 'V0.4.5.1';
       }
     });
   }
@@ -152,5 +150,5 @@
     setVersion();
   }
 
-  console.log('[Code Nest] runtime loader V0.4.5 ready');
+  console.log('[Code Nest] runtime loader V0.4.5.1 ready');
 })();
