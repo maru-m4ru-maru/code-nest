@@ -1,19 +1,15 @@
-// Code Nest runtime loader V0.4.6
+// Code Nest runtime loader V0.4.7
 (() => {
   'use strict';
 
-  // Keep Preview and the existing Studio features untouched.
   if (!document.querySelector('script[data-code-nest-preview-v4]')) {
-    document.write('<script src="preview-v4.js?v=40" data-code-nest-preview-v4><\\/script>');
+    document.write('<script src="preview-v4.js?v=42" data-code-nest-preview-v4><\\/script>');
   }
-
-  // bash-pip-fix.js is loaded directly by studio.html. It can also load pip.js
-  // itself as a fallback when the bridge has not registered yet.
 
   function setVersion() {
     document.querySelectorAll('.sidebar-footer span').forEach((el) => {
       if (/^V0\.3\.\d+$/i.test(el.textContent.trim()) || /^V0\.4\.\d+(?:\.\d+)?$/i.test(el.textContent.trim())) {
-        el.textContent = 'V0.4.6';
+        el.textContent = 'V0.4.7';
       }
     });
   }
@@ -47,7 +43,6 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(data)
       });
-
       if (!response.ok) {
         const detail = await response.text().catch(() => '');
         throw new Error(detail || `Share failed (${response.status})`);
@@ -59,7 +54,6 @@
       const base = result.url;
       const codeUrl = `${base}${base.includes('?') ? '&' : '?'}view=code`;
       const previewUrl = `${base}${base.includes('?') ? '&' : '?'}view=preview`;
-      console.log('[Code Nest Share V0.4.3] CREATED', base);
 
       document.querySelector('#shareV43Result')?.remove();
       const box = document.createElement('div');
@@ -93,7 +87,6 @@
   document.addEventListener('click', (event) => {
     const button = event.target?.closest?.('#shareBtn');
     if (!button) return;
-    console.log('[Code Nest Share V0.4.3] CLICK CAPTURE', { disabled: button.disabled });
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
@@ -103,7 +96,6 @@
   async function runAllDirect(button) {
     if (!button || button.dataset.runAllBusy === '1') return;
     const codeCells = [...document.querySelectorAll('.cell[data-type="code"]')];
-    console.log('[Code Nest RunAll V0.4.3] START', { cells: codeCells.length });
     if (!codeCells.length) {
       if (typeof window.showToast === 'function') window.showToast('実行するコードセルがありません');
       return;
@@ -113,14 +105,10 @@
     button.disabled = true;
     button.textContent = '⏳ 実行中…';
     try {
-      for (let i = 0; i < codeCells.length; i += 1) {
-        const cell = codeCells[i];
-        const name = (cell.querySelector('.cell-name')?.value || 'cell.py').trim();
-        console.log('[Code Nest RunAll V0.4.3] CELL', i + 1, name);
+      for (const cell of codeCells) {
         if (typeof window.runCodeCell !== 'function') throw new Error('runCodeCell is not available');
         await window.runCodeCell(cell);
       }
-      console.log('[Code Nest RunAll V0.4.3] DONE');
       if (typeof window.showToast === 'function') window.showToast('コードセルをすべて実行しました');
     } catch (error) {
       console.error('[Code Nest RunAll V0.4.3] FAILED', error);
@@ -135,7 +123,6 @@
   document.addEventListener('click', (event) => {
     const button = event.target?.closest?.('#runAllBtn');
     if (!button) return;
-    console.log('[Code Nest RunAll V0.4.3] CLICK CAPTURE');
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
@@ -148,5 +135,5 @@
     setVersion();
   }
 
-  console.log('[Code Nest] runtime loader V0.4.6 ready');
+  console.log('[Code Nest] runtime loader V0.4.7 ready');
 })();
