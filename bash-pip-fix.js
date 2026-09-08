@@ -1,4 +1,4 @@
-/* Code Nest Bash pip bridge V0.4.5 */
+/* Code Nest Bash pip bridge V0.4.5.1 */
 (() => {
   'use strict';
 
@@ -53,7 +53,6 @@
     const command = String(input.value || '').trim();
     if (!isPipInstall(command)) return;
 
-    // Capture before the normal Bash/app.js handlers can route pip to the shell.
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
@@ -68,8 +67,6 @@
     const command = String(input.value || '').trim();
     if (!isPipInstall(command)) return;
 
-    // Some browser/keyboard paths trigger the input handler directly instead
-    // of dispatching the form submit event. Catch that path as well.
     event.preventDefault();
     event.stopPropagation();
     event.stopImmediatePropagation();
@@ -84,7 +81,7 @@
     form.dataset.codeNestPipFix = '1';
     form.addEventListener('submit', handleSubmit, true);
     input.addEventListener('keydown', handleKeydown, true);
-    log('READY V0.4.5');
+    log('READY V0.4.5.1');
   }
 
   if (document.readyState === 'loading') {
@@ -93,8 +90,6 @@
     init();
   }
 
-  // Bash modal elements are already in studio.html, but retry once after the
-  // next task in case another runtime inserted/replaced them during startup.
   setTimeout(init, 0);
   setTimeout(init, 250);
 })();
