@@ -1,4 +1,5 @@
 const SHARE_API = 'https://code-nest-worker.maru-0727.workers.dev';
+const SHARED_PREVIEW_PAGE = './shared-preview.html';
 
 function snapshotForShare() {
   const title = document.querySelector('#titleInput')?.value || 'Untitled Notebook';
@@ -25,6 +26,11 @@ async function shareNotebook(data = snapshotForShare()) {
   return result.url;
 }
 
+function makeSafePreviewUrl(url) {
+  const workerPreview = url.includes('?') ? `${url}&view=preview` : `${url}?view=preview`;
+  return `${new URL(SHARED_PREVIEW_PAGE, location.href).href}?url=${encodeURIComponent(workerPreview)}`;
+}
+
 async function copyText(text) {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);
@@ -44,7 +50,7 @@ function showShareResult(url) {
   const existing = document.querySelector('#shareResult');
   existing?.remove();
 
-  const previewUrl = url.includes('?') ? url + '&view=preview' : url + '?view=preview';
+  const previewUrl = makeSafePreviewUrl(url);
   const codeUrl = url.includes('?') ? url + '&view=code' : url + '?view=code';
 
   const box = document.createElement('div');
@@ -82,7 +88,7 @@ function showShareResult(url) {
   box.querySelector('#sharePreviewOpen').onclick = () => window.open(previewUrl, '_blank', 'noopener,noreferrer');
   box.querySelector('#shareCopyAll').onclick = async () => {
     try {
-      await copyText(codeUrl + '\\n' + previewUrl);
+      await copyText(codeUrl + '\n' + previewUrl);
       box.querySelector('#shareCopyAll').textContent = 'コピーしました ✓';
     } catch {
       box.querySelector('#shareCodeUrl').select();
@@ -93,6 +99,7 @@ function showShareResult(url) {
     if (event.target === box) box.remove();
   });
 }
+
 async function runShare() {
   const button = document.querySelector('#shareBtn');
   if (!button) return;
@@ -129,4 +136,4 @@ if (document.readyState === 'loading') {
   initShareUI();
 }
 
-window.CodeNestShare = { shareNotebook, snapshotForShare };
+window.CodeNestShare = { shareNotebook, snapshotForShare, makeSafePreviewUrl };
