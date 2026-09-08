@@ -1,4 +1,4 @@
-// Code Nest runtime loader V0.6.1
+// Code Nest runtime loader V0.6.2
 (() => {
   'use strict';
 
@@ -7,11 +7,9 @@
   }
 
   if (!document.querySelector('script[data-code-nest-cells-sandbox]')) {
-    document.write('<script src="cell-sandbox.js?v=48" data-code-nest-cells-sandbox><\\/script>');
+    document.write('<script src="cell-sandbox.js?v=49" data-code-nest-cells-sandbox><\\/script>');
   }
 
-  // IndexedDB project store and legacy bridge are kept for existing projects.
-  // The direct notebook store below is authoritative for Studio notebook data.
   if (!document.querySelector('script[data-code-nest-project-idb]')) {
     document.write('<script src="project-idb.js?v=60" data-code-nest-project-idb><\\/script>');
   }
@@ -30,14 +28,22 @@
   function setVersion() {
     document.querySelectorAll('.sidebar-footer span').forEach((el) => {
       if (/^V0\.3\.\d+$/i.test(el.textContent.trim()) || /^V0\.4\.\d+(?:\.\d+)?$/i.test(el.textContent.trim()) || /^V0\.5\.\d+(?:\.\d+)?$/i.test(el.textContent.trim()) || /^V0\.6\.\d+(?:\.\d+)?$/i.test(el.textContent.trim())) {
-        el.textContent = 'V0.6.1';
+        el.textContent = 'V0.6.2';
       }
     });
   }
 
   function sharedPreviewUrl(url) {
-    const workerPreview = `${url}${url.includes('?') ? '&' : '?'}view=preview`;
-    return `${new URL('./shared-preview.html', location.href).href}?url=${encodeURIComponent(workerPreview)}`;
+    try {
+      const share = new URL(url);
+      const id = share.pathname.split('/').filter(Boolean).pop();
+      if (!id) throw new Error('Share ID is missing');
+      const safe = new URL('./shared-preview.html', location.href);
+      safe.searchParams.set('id', id);
+      return safe.href;
+    } catch (_) {
+      return new URL('./shared-preview.html', location.href).href;
+    }
   }
 
   function shareSnapshot() {
@@ -90,7 +96,7 @@
       box.addEventListener('click', (event) => { if (event.target === box) box.remove(); });
       button.textContent = '✓ 共有済み';
     } catch (error) {
-      console.error('[Code Nest Share V0.6.1] FAILED', error);
+      console.error('[Code Nest Share V0.6.2] FAILED', error);
       alert(`共有に失敗しました\n${error?.message || error}`);
       button.innerHTML = original;
     } finally {
@@ -125,7 +131,7 @@
       }
       if (typeof window.showToast === 'function') window.showToast('コードセルをすべて実行しました');
     } catch (error) {
-      console.error('[Code Nest RunAll V0.6.1] FAILED', error);
+      console.error('[Code Nest RunAll V0.6.2] FAILED', error);
       if (typeof window.showToast === 'function') window.showToast('すべて実行中にエラーが発生しました');
     } finally {
       button.disabled = false; button.dataset.runAllBusy = '0'; button.innerHTML = original;
@@ -146,5 +152,5 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
   else boot();
 
-  console.log('[Code Nest] runtime loader V0.6.1 ready');
+  console.log('[Code Nest] runtime loader V0.6.2 ready');
 })();
