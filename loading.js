@@ -1,4 +1,4 @@
-// Code Nest runtime loader V0.5.4
+// Code Nest runtime loader V0.5.6
 (() => {
   'use strict';
 
@@ -10,18 +10,19 @@
     document.write('<script src="cell-sandbox.js?v=47" data-code-nest-cells-sandbox><\\/script>');
   }
 
-  // IndexedDB is authoritative. Load its storage bridge synchronously BEFORE app.js.
+  // IndexedDB is authoritative. Load the async store first and the
+  // synchronous per-project bridge immediately after it, both BEFORE app.js.
   if (!document.querySelector('script[data-code-nest-project-idb]')) {
-    document.write('<script src="project-idb.js?v=54" data-code-nest-project-idb><\\/script>');
+    document.write('<script src="project-idb.js?v=56" data-code-nest-project-idb><\\/script>');
   }
   if (!document.querySelector('script[data-code-nest-project-idb-runtime]')) {
-    document.write('<script src="project-idb-runtime.js?v=54" data-code-nest-project-idb-runtime><\\/script>');
+    document.write('<script src="project-idb-runtime.js?v=56" data-code-nest-project-idb-runtime><\\/script>');
   }
 
   function setVersion() {
     document.querySelectorAll('.sidebar-footer span').forEach((el) => {
       if (/^V0\.3\.\d+$/i.test(el.textContent.trim()) || /^V0\.4\.\d+(?:\.\d+)?$/i.test(el.textContent.trim()) || /^V0\.5\.\d+(?:\.\d+)?$/i.test(el.textContent.trim())) {
-        el.textContent = 'V0.5.4';
+        el.textContent = 'V0.5.6';
       }
     });
   }
@@ -78,7 +79,7 @@
       box.addEventListener('click', (event) => { if (event.target === box) box.remove(); });
       button.textContent = '✓ 共有済み';
     } catch (error) {
-      console.error('[Code Nest Share V0.5.4] FAILED', error);
+      console.error('[Code Nest Share V0.5.6] FAILED', error);
       alert(`共有に失敗しました\n${error?.message || error}`);
       button.innerHTML = original;
     } finally {
@@ -116,7 +117,7 @@
       }
       if (typeof window.showToast === 'function') window.showToast('コードセルをすべて実行しました');
     } catch (error) {
-      console.error('[Code Nest RunAll V0.5.4] FAILED', error);
+      console.error('[Code Nest RunAll V0.5.6] FAILED', error);
       if (typeof window.showToast === 'function') window.showToast('すべて実行中にエラーが発生しました');
     } finally {
       button.disabled = false;
@@ -140,5 +141,5 @@
     setVersion();
   }
 
-  console.log('[Code Nest] runtime loader V0.5.4 ready');
+  console.log('[Code Nest] runtime loader V0.5.6 ready');
 })();
