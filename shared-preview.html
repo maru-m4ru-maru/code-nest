@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#07131d">
+<title>Code Nest — Shared Preview</title>
+<style>
+:root{--bg:#07131d;--panel:#0d1e2a;--panel2:#102431;--line:#24404e;--text:#f3f8fb;--muted:#9cb0bb;--blue:#16b9ff;--danger:#ff8a8a}
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:radial-gradient(circle at 12% 0%,#103044 0,transparent 30%),radial-gradient(circle at 88% 8%,#201642 0,transparent 28%),linear-gradient(180deg,var(--bg),#061018);color:var(--text);font-family:Inter,"Noto Sans JP",system-ui,sans-serif}
+.shell{width:min(1280px,calc(100% - 28px));margin:0 auto;padding:18px 0 24px}
+.top{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-bottom:14px}
+.brand{font-weight:800;font-size:18px}.brand small{display:block;color:var(--muted);font-size:11px;font-weight:500;margin-top:2px}
+.controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+button{font:inherit}
+.btn{border:1px solid var(--line);background:#ffffff08;color:var(--text);border-radius:10px;padding:9px 12px;cursor:pointer;font-weight:700}
+.btn.primary{background:linear-gradient(135deg,var(--blue),#078bd7);border-color:transparent;color:#03131d}
+.btn.danger{border-color:#7a3940;background:#351a20;color:#ffd3d3}
+.status{display:inline-flex;align-items:center;gap:7px;padding:8px 10px;border:1px solid var(--line);border-radius:10px;background:#ffffff06;color:#c6d4db;font-size:12px}
+.dot{width:7px;height:7px;border-radius:50%;background:#62df9b;box-shadow:0 0 0 4px #62df9b18}
+.status.off .dot{background:#ff7676;box-shadow:0 0 0 4px #ff767618}
+.url{padding:9px 12px;border:1px solid var(--line);border-radius:10px;background:#ffffff05;color:#8fa4af;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11px}
+.stage{position:relative;min-height:72vh;border:1px solid var(--line);border-radius:18px;overflow:hidden;background:#02080d;box-shadow:0 25px 80px #0008}
+iframe{width:100%;height:72vh;border:0;display:block;background:#fff}
+.empty{min-height:72vh;display:grid;place-items:center;padding:28px;text-align:center}.empty-box{max-width:650px}.empty-box h1{margin:0 0 10px;font-size:28px}.empty-box p{margin:0;color:var(--muted);line-height:1.8}
+.overlay{position:absolute;inset:0;display:grid;place-items:center;background:rgba(3,8,12,.72);backdrop-filter:blur(10px);padding:20px;z-index:5}
+.dialog{width:min(700px,100%);background:linear-gradient(145deg,#102431,#0b1b25);border:1px solid var(--line);border-radius:20px;padding:22px;box-shadow:0 30px 90px #0009}
+.dialog h2{margin:0 0 8px;font-size:22px}.dialog p{margin:0;color:#b7c5cd;font-size:13px;line-height:1.7}
+.warning{margin:16px 0;padding:15px;border:1px solid #8f5b32;background:#2a1c13;border-radius:14px;color:#f3dbad;white-space:pre-wrap;line-height:1.8;font-size:13px}
+.notice{margin:12px 0 0;padding:12px;border:1px solid var(--line);background:#ffffff05;border-radius:12px;color:#9fb0b9;line-height:1.7;font-size:11px}
+.actions{display:flex;justify-content:flex-end;gap:8px;flex-wrap:wrap;margin-top:16px}
+.footer{margin-top:10px;color:#758c98;font-size:10px;text-align:center}
+@media(max-width:760px){.shell{width:min(100% - 18px,1280px)}.top{align-items:flex-start;flex-direction:column}.controls{width:100%}.url{width:100%}.stage,iframe{min-height:78vh;height:78vh}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <header class="top">
+    <div class="brand">&lt;/&gt; Code Nest<small>Shared Preview</small></div>
+    <div class="controls">
+      <span class="status" id="sandboxStatus"><i class="dot"></i><span>Sandbox ON</span></span>
+      <button class="btn" id="sandboxToggle" type="button">SandboxをOFF</button>
+      <button class="btn primary" id="runButton" type="button">▶ プレビューを実行</button>
+    </div>
+  </header>
+  <div class="url" id="previewUrl"></div>
+  <section class="stage" id="stage">
+    <div class="empty"><div class="empty-box"><h1>共有プレビュー</h1><p>安全確認後に、共有されたHTMLプレビューを実行します。初期状態ではSandboxがONです。</p></div></div>
+    <div class="overlay" id="confirmOverlay">
+      <form class="dialog" id="runDialog">
+        <h2 id="dialogTitle">共有プレビューを実行します</h2>
+        <p>共有されたコードをブラウザで実行します。Sandboxの状態とURLを確認してから実行してください。</p>
+        <div class="warning" id="warningText"></div>
+        <div class="notice">プレビューURL：<br><span id="dialogUrl"></span><br><br>Sandbox ONでも、ブラウザの同一生成元ポリシーなど、ブラウザ側のセキュリティ境界は別途有効です。</div>
+        <div class="actions">
+          <button class="btn" id="cancelButton" type="button">キャンセル</button>
+          <button class="btn primary" id="confirmRun" type="submit">Sandbox ONで実行</button>
+        </div>
+      </form>
+    </div>
+  </section>
+  <div class="footer">Code Nest Shared Preview · Sandboxは初期状態でON</div>
+</div>
+<script>
+(() => {
+  'use strict';
+  const params = new URLSearchParams(location.search);
+  const rawUrl = params.get('url') || '';
+  const allowed = new Set(['code-nest-worker.maru-0727.workers.dev']);
+  const warning =
+    '意味の分からないコードは「絶対に」SandboxOFFで実行しないでください。\n\n' +
+    '悪意あるコードだった場合、パスワードなどが流出などの悪影響が生じる可能性が高いです。\n\n' +
+    'CodeNest開発者は、そのような行為で生じるいかなる問題の責任を一切負いません。';
+
+  const previewUrl = (() => {
+    try {
+      const u = new URL(rawUrl, location.href);
+      if (u.protocol !== 'https:' || !allowed.has(u.hostname)) throw new Error('許可されていないプレビューURLです');
+      return u.href;
+    } catch (e) {
+      return '';
+    }
+  })();
+
+  const stage = document.getElementById('stage');
+  const overlay = document.getElementById('confirmOverlay');
+  const dialog = document.getElementById('runDialog');
+  const warningText = document.getElementById('warningText');
+  const dialogUrl = document.getElementById('dialogUrl');
+  const runButton = document.getElementById('runButton');
+  const confirmRun = document.getElementById('confirmRun');
+  const cancelButton = document.getElementById('cancelButton');
+  const sandboxToggle = document.getElementById('sandboxToggle');
+  const sandboxStatus = document.getElementById('sandboxStatus');
+  const previewUrlEl = document.getElementById('previewUrl');
+
+  let sandboxEnabled = localStorage.getItem('codeNest.sharedPreview.sandbox') !== 'off';
+  let running = false;
+  let iframe = null;
+
+  warningText.textContent = warning;
+  dialogUrl.textContent = previewUrl || '無効なURL';
+  previewUrlEl.textContent = previewUrl || '共有プレビューURLが指定されていません。';
+
+  function updateSandboxUI() {
+    sandboxStatus.classList.toggle('off', !sandboxEnabled);
+    sandboxStatus.querySelector('span:last-child').textContent = sandboxEnabled ? 'Sandbox ON' : 'Sandbox OFF';
+    sandboxToggle.textContent = sandboxEnabled ? 'SandboxをOFF' : 'SandboxをON';
+    confirmRun.textContent = sandboxEnabled ? 'Sandbox ONで実行' : 'Sandbox OFFで実行';
+  }
+
+  function createFrame() {
+    iframe?.remove();
+    iframe = document.createElement('iframe');
+    iframe.title = 'Code Nest Shared Preview';
+    iframe.referrerPolicy = 'no-referrer';
+    if (sandboxEnabled) iframe.setAttribute('sandbox', 'allow-scripts');
+    iframe.src = previewUrl;
+    stage.prepend(iframe);
+    running = true;
+  }
+
+  function showRunConfirm() {
+    if (!previewUrl) return;
+    overlay.hidden = false;
+    updateSandboxUI();
+  }
+
+  function confirmOff() {
+    return window.confirm(
+      '共有プレビューのSandboxをOFFにしますか？\n\n' + warning + '\n\n' +
+      '※ Sandbox OFFでもブラウザやOSそのもののセキュリティ機構を無効化するものではありません。'
+    );
+  }
+
+  sandboxToggle.addEventListener('click', () => {
+    if (sandboxEnabled) {
+      if (!confirmOff()) return;
+      sandboxEnabled = false;
+    } else {
+      sandboxEnabled = true;
+    }
+    localStorage.setItem('codeNest.sharedPreview.sandbox', sandboxEnabled ? 'on' : 'off');
+    updateSandboxUI();
+    if (running) showRunConfirm();
+  });
+
+  dialog.addEventListener('submit', (event) => {
+    event.preventDefault();
+    if (!previewUrl) return;
+    createFrame();
+    overlay.hidden = true;
+  });
+
+  cancelButton.addEventListener('click', () => {
+    overlay.hidden = true;
+  });
+
+  runButton.addEventListener('click', () => showRunConfirm());
+
+  updateSandboxUI();
+  if (!previewUrl) {
+    runButton.disabled = true;
+    sandboxToggle.disabled = true;
+  }
+})();
+</script>
+</body>
+</html>
