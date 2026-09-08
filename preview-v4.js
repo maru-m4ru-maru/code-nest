@@ -1,4 +1,4 @@
-/* Code Nest Preview V0.4.0 */
+/* Code Nest Preview V0.4.1 */
 (() => {
   'use strict';
 
@@ -7,9 +7,25 @@
   const warn = (...args) => console.warn(PREFIX, ...args);
   const $ = (selector, root = document) => root.querySelector(selector);
   const $$ = (selector, root = document) => [...root.querySelectorAll(selector)];
+  const CELL_SANDBOX_KEY = 'codeNest.cells.sandbox';
 
   let activeUrl = null;
   let modal = null;
+
+  function cellsSandboxEnabled() {
+    return localStorage.getItem(CELL_SANDBOX_KEY) !== 'off';
+  }
+
+  function applyCellSandbox(frame) {
+    if (!frame) return;
+    if (cellsSandboxEnabled()) {
+      frame.setAttribute('sandbox', 'allow-scripts');
+      frame.dataset.sandbox = 'on';
+    } else {
+      frame.removeAttribute('sandbox');
+      frame.dataset.sandbox = 'off';
+    }
+  }
 
   function fileName(cell) {
     return (cell?.querySelector('.cell-name')?.value || '').trim();
@@ -78,7 +94,6 @@
     const doc = new DOMParser().parseFromString(htmlFile.source, 'text/html');
     const missing = [];
 
-    // Project CSS -> inline <style>
     $$('link[href]', doc).forEach((link) => {
       const href = link.getAttribute('href');
       const target = resolvePath(htmlFile.path, href);
@@ -95,7 +110,6 @@
       }
     });
 
-    // Project JS -> inline <script>
     $$('script[src]', doc).forEach((script) => {
       const src = script.getAttribute('src');
       const target = resolvePath(htmlFile.path, src);
@@ -113,8 +127,6 @@
       }
     });
 
-    // Local HTML navigation: keep it inside the preview instead of trying to
-    // request a GitHub Pages path that does not exist as a real file there.
     $$('[href]', doc).forEach((el) => {
       const href = el.getAttribute('href');
       const target = resolvePath(htmlFile.path, href);
@@ -125,7 +137,7 @@
       }
     });
 
-    const diagnostics = `\n<script>console.log('[Code Nest Preview V0.4] sandbox page loaded');${missing.length ? `console.warn('[Code Nest Preview V0.4] missing files', ${JSON.stringify([...new Set(missing)])});` : ''}</script>`;
+    const diagnostics = `\n<script>console.log('[Code Nest Preview V0.4] page loaded');${missing.length ? `console.warn('[Code Nest Preview V0.4] missing files', ${JSON.stringify([...new Set(missing)])});` : ''}</script>`;
     const html = '<!doctype html>' + doc.documentElement.outerHTML.replace(/<\/body>/i, diagnostics + '</body>');
     log('BUILD DONE', { bytes: html.length, missing: [...new Set(missing)] });
     return html;
@@ -143,12 +155,12 @@
         <header class="cnp4-head">
           <div>
             <strong id="cnp4-title">ブラウザプレビュー</strong>
-            <span>Code Nest V0.4</span>
+            <span id="cnp4-sandbox-state">Cells Sandbox: ON</span>
           </div>
           <button type="button" class="cnp4-close" data-cnp4-close aria-label="閉じる">×</button>
         </header>
         <div class="cnp4-body">
-          <iframe id="codeNestPreviewFrameV4" title="Code Nest V0.4 Preview" sandbox="allow-scripts" referrerpolicy="no-referrer"></iframe>
+          <iframe id="codeNestPreviewFrameV4" title="Code Nest V0.4 Preview" referrerpolicy="no-referrer"></iframe>
         </div>
         <footer class="cnp4-foot">
           <span id="cnp4-status">Ready</span>
@@ -185,6 +197,7 @@
     const panel = ensureModal();
     const frame = $('#codeNestPreviewFrameV4', panel);
     const status = $('#cnp4-status', panel);
+    const sandboxState = $('#cnp4-sandbox-state', panel);
 
     if (activeUrl) {
       try { URL.revokeObjectURL(activeUrl); } catch (_) {}
@@ -201,16 +214,19 @@
       return;
     }
 
+    const sandboxed = cellsSandboxEnabled();
+    applyCellSandbox(frame);
+    if (sandboxState) sandboxState.textContent = sandboxed ? 'Cells Sandbox: ON' : '⚠️ Cells Sandbox: OFF';
+    if (!sandboxed) warn('Cells Sandbox is OFF: project code runs without the preview iframe sandbox.');
+
     frame.onload = () => {
       log('IFRAME LOAD', frame.src);
-      if (status) status.textContent = 'Loaded';
+      if (status) status.textContent = sandboxed ? 'Loaded · Sandbox ON' : 'Loaded · Sandbox OFF';
     };
     frame.onerror = (event) => {
       console.error(PREFIX, 'IFRAME ERROR', event);
       if (status) status.textContent = 'Iframe error';
     };
-    frame.setAttribute('sandbox', 'allow-scripts');
-    frame.setAttribute('referrerpolicy', 'no-referrer');
     frame.src = activeUrl;
     if (status) status.textContent = 'Loading…';
 
@@ -222,7 +238,8 @@
       display: getComputedStyle(panel).display,
       zIndex: getComputedStyle(panel).zIndex,
       frame: !!frame,
-      src: frame.src
+      src: frame.src,
+      sandbox: frame.getAttribute('sandbox') || '(none)'
     });
   }
 
@@ -233,63 +250,47 @@
     modal.setAttribute('aria-hidden', 'true');
     document.body.style.overflow = '';
     const frame = $('#codeNestPreviewFrameV4', modal);
-    if (frame) frame.src = 'about:blank';
+    if (frame) {
+      frame.src = 'about:blank';
+      applyCellSandbox(frame);
+    }
     if (activeUrl) {
       try { URL.revokeObjectURL(activeUrl); } catch (_) {}
       activeUrl = null;
     }
   }
 
-  function isWebFile(name) {
-    return /\.(?:html?|css|m?js)$/i.test(name);
+  function inspect() {
+    const frame = modal && $('#codeNestPreviewFrameV4', modal);
+    return {
+      modal: !!modal,
+      activeUrl,
+      cellsSandbox: cellsSandboxEnabled(),
+      iframeSandbox: frame?.getAttribute('sandbox') || '(none)'
+    };
   }
 
-  document.addEventListener('click', (event) => {
-    const button = event.target?.closest?.('button[data-act="preview"],button[data-act="run"]');
-    if (!button) return;
-
-    const cell = button.closest('.cell');
-    if (!cell || cell.dataset.type !== 'code') return;
-
-    const name = fileName(cell);
-    const action = button.dataset.act;
-    log('BUTTON', { action, name });
-
-    if (action === 'preview') {
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      if (!isWebFile(name)) {
-        console.info(PREFIX, 'Preview ignored for non-web file:', name || '(unnamed)');
-        return;
-      }
-      openPreview('preview button');
-      return;
-    }
-
-    // Preserve normal Python execution. Only intercept Run for web files.
-    if (action === 'run' && isWebFile(name)) {
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
-      openPreview('run button');
-    }
-  }, true);
-
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape') closePreview();
-  });
-
-  window.CodeNestPreviewV4 = Object.freeze({
-    open: () => openPreview('console'),
+  globalThis.CodeNestPreviewV4 = {
+    open: openPreview,
     close: closePreview,
-    inspect: () => ({
-      modal: !!modal,
-      open: !!modal?.classList.contains('is-open'),
-      frame: !!$('#codeNestPreviewFrameV4'),
-      files: [...collectProject().keys()]
-    })
+    inspect,
+    getCellsSandbox: cellsSandboxEnabled,
+    setCellsSandbox(enabled) {
+      localStorage.setItem(CELL_SANDBOX_KEY, enabled ? 'on' : 'off');
+      const frame = modal && $('#codeNestPreviewFrameV4', modal);
+      applyCellSandbox(frame);
+      const sandboxState = modal && $('#cnp4-sandbox-state', modal);
+      if (sandboxState) sandboxState.textContent = enabled ? 'Cells Sandbox: ON' : '⚠️ Cells Sandbox: OFF';
+      return enabled;
+    }
+  };
+
+  document.addEventListener('code-nest-cells-sandbox-changed', () => {
+    const frame = modal && $('#codeNestPreviewFrameV4', modal);
+    applyCellSandbox(frame);
+    const state = modal && $('#cnp4-sandbox-state', modal);
+    if (state) state.textContent = cellsSandboxEnabled() ? 'Cells Sandbox: ON' : '⚠️ Cells Sandbox: OFF';
   });
 
-  log('READY V0.4.0');
+  log('module ready V0.4.1');
 })();
