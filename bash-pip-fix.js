@@ -1,9 +1,11 @@
-/* Code Nest Bash pip bridge V0.4.5.1 */
+/* Code Nest Bash pip bridge V0.4.5.2 */
 (() => {
   'use strict';
 
   const PREFIX = '[Code Nest Bash pip]';
   const log = (...args) => console.log(PREFIX, ...args);
+  const PIP_SRC = 'pip.js?v=52';
+  let bridgePromise = null;
 
   function isPipInstall(command) {
     return /^(?:pip|python\s+-m\s+pip|python3\s+-m\s+pip|py\s+-m\s+pip)\s+install\s+(.+)$/i.exec(command.trim());
@@ -19,6 +21,43 @@
     root.scrollTop = root.scrollHeight;
   }
 
+  function ensurePipBridge() {
+    if (typeof globalThis.codeNestPipInstall === 'function') {
+      return Promise.resolve(globalThis.codeNestPipInstall);
+    }
+
+    if (bridgePromise) return bridgePromise;
+
+    bridgePromise = new Promise((resolve, reject) => {
+      log('BRIDGE missing; loading pip.js directly');
+
+      const existing = document.querySelector('script[data-code-nest-pip-runtime]');
+      if (existing) {
+        existing.addEventListener('load', () => {
+          if (typeof globalThis.codeNestPipInstall === 'function') resolve(globalThis.codeNestPipInstall);
+          else reject(new Error('pip.js loaded but codeNestPipInstall is unavailable'));
+        }, { once: true });
+        existing.addEventListener('error', () => reject(new Error('pip.js failed to load')), { once: true });
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = PIP_SRC;
+      script.async = false;
+      script.dataset.codeNestPipRuntime = '1';
+      script.onload = () => {
+        if (typeof globalThis.codeNestPipInstall === 'function') resolve(globalThis.codeNestPipInstall);
+        else reject(new Error('pip.js loaded but codeNestPipInstall is unavailable'));
+      };
+      script.onerror = () => reject(new Error('pip.js failed to load'));
+      document.head.appendChild(script);
+    }).finally(() => {
+      if (typeof globalThis.codeNestPipInstall !== 'function') bridgePromise = null;
+    });
+
+    return bridgePromise;
+  }
+
   async function runPip(command, input) {
     const match = isPipInstall(command);
     if (!match) return false;
@@ -27,17 +66,11 @@
     log('INTERCEPT', command);
     print('coder@code-nest:/ $ ' + command, 'bash-command');
 
-    if (typeof globalThis.codeNestPipInstall !== 'function') {
-      print('pip bridge is not ready. Reload Code Nest and try again.', 'bash-error');
-      log('BRIDGE NOT READY');
-      return true;
-    }
-
-    if (input) input.value = '';
-
     try {
+      const pipInstall = await ensurePipBridge();
+      if (input) input.value = '';
       log('INSTALL', spec);
-      const result = await globalThis.codeNestPipInstall(spec.split(/\s+/));
+      const result = await pipInstall(spec.split(/\s+/));
       if (result) print(result);
       log('DONE', spec);
     } catch (error) {
@@ -81,7 +114,7 @@
     form.dataset.codeNestPipFix = '1';
     form.addEventListener('submit', handleSubmit, true);
     input.addEventListener('keydown', handleKeydown, true);
-    log('READY V0.4.5.1');
+    log('READY V0.4.5.2');
   }
 
   if (document.readyState === 'loading') {
