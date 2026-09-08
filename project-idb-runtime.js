@@ -1,7 +1,11 @@
-/* Code Nest IndexedDB synchronous runtime bridge V0.5.6 */
+/* Code Nest IndexedDB synchronous runtime bridge V0.5.7 */
 (() => {
   'use strict';
 
+  // app.js still uses a synchronous localStorage API. The actual source of
+  // truth is IndexedDB; this bridge gives app.js a project-local synchronous
+  // view and independently watches the DOM so saves do not depend on app.js's
+  // legacy save implementation.
   const DB_NAME = 'CodeNestDB';
   const DB_VERSION = 3;
   const NOTEBOOKS = 'notebooks';
@@ -56,52 +60,81 @@
     }));
   }
 
-  async function saveNotebookNow() {
-    if (!lastNotebook) return;
-    try {
-      const now = Date.now();
-      await put(NOTEBOOKS, { id: projectId, ...lastNotebook, updatedAt: now });
-      const meta = await getProject();
-      if (meta) {
-        await put(PROJECTS, {
-          ...meta,
-          title: lastNotebook.title || meta.title || 'Untitled Project',
-          updatedAt: now
-        });
-      }
-    } catch (error) {
-      console.warn('[Code Nest IndexedDB] runtime notebook save failed', error);
-    }
+  function clone(value) {
+    try { return structuredClone(value); } catch (_) { return JSON.parse(JSON.stringify(value)); }
   }
 
-  async function saveFsNow() {
-    if (!lastFs) return;
-    try {
-      await put(FILESYSTEMS, { id: projectId, fs: lastFs, updatedAt: Date.now() });
-    } catch (error) {
-      console.warn('[Code Nest IndexedDB] runtime filesystem save failed', error);
-    }
+  function domNotebook() {
+    return {
+      title: document.getElementById('titleInput')?.value || 'Untitled Project',
+      cells: [...document.querySelectorAll('#cells .cell')].map((cell) => ({
+        type: cell.dataset.type || 'code',
+        name: cell.querySelector('.cell-name')?.value || '',
+        source: cell.querySelector('textarea')?.value || '',
+        output: cell.querySelector('.output')?.textContent || cell.querySelector('.terminal-output')?.textContent || ''
+      }))
+    };
+  }
+
+  function signature(value) {
+    try { return JSON.stringify(value); } catch (_) { return ''; }
   }
 
   let notebookTimer = null;
   let fsTimer = null;
   let notebookSavePromise = null;
   let fsSavePromise = null;
-  let lastNotebook = notebook;
-  let lastFs = filesystem;
+  let lastNotebook = clone(notebook);
+  let lastFs = clone(filesystem);
+  let lastDomSignature = '';
+  let observing = false;
 
-  function persistNotebook() {
-    clearTimeout(notebookTimer);
-    notebookTimer = setTimeout(() => {
-      notebookSavePromise = saveNotebookNow();
-    }, 90);
+  async function saveNotebookNow(value) {
+    const data = clone(value || lastNotebook);
+    if (!data) return;
+    lastNotebook = data;
+    try { sessionStorage.setItem(notebookKey, JSON.stringify(lastNotebook)); } catch (_) {}
+
+    const now = Date.now();
+    try {
+      await put(NOTEBOOKS, { id: projectId, ...data, updatedAt: now });
+      const meta = await getProject();
+      if (meta) {
+        await put(PROJECTS, {
+          ...meta,
+          title: data.title || meta.title || 'Untitled Project',
+          updatedAt: now
+        });
+      }
+      const title = document.getElementById('titleInput');
+      const crumb = document.getElementById('crumbTitle');
+      const cleanTitle = data.title || 'Untitled Project';
+      if (title && title.value !== cleanTitle && document.activeElement !== title) title.value = cleanTitle;
+      if (crumb && crumb.textContent !== cleanTitle) crumb.textContent = cleanTitle;
+    } catch (error) {
+      console.warn('[Code Nest IndexedDB] notebook save failed', error);
+    }
   }
 
-  function persistFs() {
+  async function saveFsNow() {
+    if (!lastFs) return;
+    try { await put(FILESYSTEMS, { id: projectId, fs: clone(lastFs), updatedAt: Date.now() }); }
+    catch (error) { console.warn('[Code Nest IndexedDB] filesystem save failed', error); }
+  }
+
+  function queueNotebookSave(value) {
+    lastNotebook = clone(value);
+    clearTimeout(notebookTimer);
+    notebookTimer = setTimeout(() => {
+      notebookSavePromise = saveNotebookNow(lastNotebook);
+    }, 80);
+  }
+
+  function queueFsSave() {
     clearTimeout(fsTimer);
     fsTimer = setTimeout(() => {
       fsSavePromise = saveFsNow();
-    }, 90);
+    }, 80);
   }
 
   const nativeGet = Storage.prototype.getItem;
@@ -121,9 +154,7 @@
       if (key === 'code-nest-v02') {
         try {
           notebook = JSON.parse(value);
-          lastNotebook = notebook;
-          sessionStorage.setItem(notebookKey, JSON.stringify(notebook));
-          persistNotebook();
+          queueNotebookSave(notebook);
         } catch (error) {
           console.warn('[Code Nest IndexedDB] notebook bridge parse failed', error);
         }
@@ -133,8 +164,8 @@
         try {
           filesystem = JSON.parse(value);
           lastFs = filesystem;
-          sessionStorage.setItem(fsKey, JSON.stringify(filesystem));
-          persistFs();
+          try { sessionStorage.setItem(fsKey, JSON.stringify(filesystem)); } catch (_) {}
+          queueFsSave();
         } catch (error) {
           console.warn('[Code Nest IndexedDB] filesystem bridge parse failed', error);
         }
@@ -164,10 +195,39 @@
     return nativeRemove.call(this, key);
   };
 
+  function syncDomToNotebook() {
+    if (!observing) return;
+    const next = domNotebook();
+    const nextSig = signature(next);
+    if (!nextSig || nextSig === lastDomSignature) return;
+    lastDomSignature = nextSig;
+    notebook = next;
+    queueNotebookSave(next);
+  }
+
+  function installDomPersistence() {
+    if (!document.getElementById('cells') || observing) return;
+    observing = true;
+
+    const cells = document.getElementById('cells');
+    const observer = new MutationObserver(() => syncDomToNotebook());
+    observer.observe(cells, { childList: true, subtree: true, characterData: true });
+
+    document.addEventListener('input', (event) => {
+      if (event.target?.id === 'titleInput' || event.target?.closest?.('#cells')) syncDomToNotebook();
+    }, true);
+    document.addEventListener('change', (event) => {
+      if (event.target?.id === 'titleInput' || event.target?.closest?.('#cells')) syncDomToNotebook();
+    }, true);
+
+    // Capture the exact post-app.js state after the DOM has finished booting.
+    requestAnimationFrame(() => requestAnimationFrame(syncDomToNotebook));
+  }
+
   function flush() {
     clearTimeout(notebookTimer);
     clearTimeout(fsTimer);
-    if (lastNotebook) notebookSavePromise = saveNotebookNow();
+    if (lastNotebook) notebookSavePromise = saveNotebookNow(lastNotebook);
     if (lastFs) fsSavePromise = saveFsNow();
   }
 
@@ -175,5 +235,12 @@
   window.addEventListener('beforeunload', flush, { capture: true });
 
   globalThis.__codeNestIDBStorageBridge = true;
-  console.log('[Code Nest IndexedDB] synchronous runtime bridge ready', { projectId });
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', installDomPersistence, { once: true });
+  } else {
+    installDomPersistence();
+  }
+
+  console.log('[Code Nest IndexedDB] V0.5.7 bridge + DOM persistence ready', { projectId });
 })();
