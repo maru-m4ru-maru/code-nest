@@ -5,11 +5,10 @@
   const DB_NAME = 'CodeNestDB';
   const DB_VERSION = 1;
   const NOTEBOOK_STORE = 'notebooks';
-  const FS_STORE = 'filesystems';
   const PROJECT_META = 'projects';
+  const PROJECT_META_KEY = 'codeNest.projects.v1';
   const PROJECT_PREFIX = 'codeNest.project.';
   const OLD_NOTEBOOK_KEY = 'code-nest-v02';
-  const OLD_FS_KEY = 'code-nest-fs-v02';
   const params = new URLSearchParams(location.search);
   const projectId = (params.get('project') || 'default').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80) || 'default';
 
@@ -33,7 +32,6 @@
         const db = request.result;
         if (!db.objectStoreNames.contains(PROJECT_META)) db.createObjectStore(PROJECT_META, { keyPath: 'id' });
         if (!db.objectStoreNames.contains(NOTEBOOK_STORE)) db.createObjectStore(NOTEBOOK_STORE, { keyPath: 'id' });
-        if (!db.objectStoreNames.contains(FS_STORE)) db.createObjectStore(FS_STORE, { keyPath: 'id' });
       };
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => reject(request.error || new Error('IndexedDB open failed'));
@@ -70,6 +68,20 @@
     }
   }
 
+  function readProjectMeta() {
+    try {
+      const raw = localStorage.getItem(PROJECT_META_KEY);
+      const list = raw ? JSON.parse(raw) : [];
+      return Array.isArray(list) ? list : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function writeProjectMeta(list) {
+    try { localStorage.setItem(PROJECT_META_KEY, JSON.stringify(list)); } catch (_) {}
+  }
+
   function currentNotebookFromDom() {
     const title = document.getElementById('titleInput')?.value || 'Untitled Project';
     const cells = [...document.querySelectorAll('#cells .cell')].map((cell) => ({
@@ -91,10 +103,28 @@
     const nextSig = signature(notebook);
     if (!nextSig || nextSig === lastSavedSignature) return;
     lastSavedSignature = nextSig;
+    const now = Date.now();
     try {
-      await put(NOTEBOOK_STORE, { id: projectId, ...notebook, updatedAt: Date.now() });
+      await put(NOTEBOOK_STORE, { id: projectId, ...notebook, updatedAt: now });
+
       const meta = await get(PROJECT_META, projectId);
-      if (meta) await put(PROJECT_META, { ...meta, title: notebook.title || meta.title || 'Untitled Project', updatedAt: Date.now() });
+      if (meta) await put(PROJECT_META, {
+        ...meta,
+        title: notebook.title || meta.title || 'Untitled Project',
+        updatedAt: now
+      });
+
+      // Dashboard uses this metadata list, so Studio and Dashboard stay in sync.
+      const list = readProjectMeta();
+      const index = list.findIndex((item) => item && item.id === projectId);
+      if (index >= 0) {
+        list[index] = {
+          ...list[index],
+          title: notebook.title || list[index].title || 'Untitled Project',
+          updatedAt: now
+        };
+        writeProjectMeta(list);
+      }
     } catch (error) {
       console.warn('[Code Nest IndexedDB] save failed', error);
     }
@@ -118,16 +148,17 @@
 
     restoring = true;
     try {
-      const existing = [...cellsRoot.querySelectorAll('.cell')];
-      existing.forEach((cell) => cell.remove());
+      [...cellsRoot.querySelectorAll('.cell')].forEach((cell) => cell.remove());
 
-      const codeBtn = document.getElementById('addCodeBtn');
-      const markdownBtn = document.getElementById('addMarkdownBtn');
-      const terminalBtn = document.getElementById('addTerminalBtn');
+      const buttons = {
+        code: document.getElementById('addCodeBtn'),
+        markdown: document.getElementById('addMarkdownBtn'),
+        terminal: document.getElementById('addTerminalBtn')
+      };
 
       for (const saved of notebook.cells) {
         const type = saved.type === 'markdown' ? 'markdown' : saved.type === 'terminal' ? 'terminal' : 'code';
-        const btn = type === 'code' ? codeBtn : type === 'markdown' ? markdownBtn : terminalBtn;
+        const btn = buttons[type];
         if (!btn) continue;
         btn.click();
         const cell = cellsRoot.lastElementChild;
@@ -151,7 +182,8 @@
         title.value = notebook.title;
         fireInput(title);
       }
-      document.getElementById('crumbTitle')?.replaceChildren(document.createTextNode(notebook.title || 'Untitled Project'));
+      const crumb = document.getElementById('crumbTitle');
+      if (crumb) crumb.textContent = notebook.title || 'Untitled Project';
       lastSavedSignature = signature(currentNotebookFromDom());
     } finally {
       restoring = false;
@@ -174,7 +206,6 @@
         lastSavedSignature = signature(fallback);
       }
 
-      // Keep the active project title mirrored between Studio and Dashboard.
       const title = document.getElementById('titleInput');
       if (title && !title.dataset.idbStore) {
         title.dataset.idbStore = '1';
@@ -193,20 +224,13 @@
         if (event.target?.closest?.('#cells, #addCodeBtn, #addMarkdownBtn, #addTerminalBtn, #bottomAddBtn')) scheduleSave();
       }, true);
 
-      window.addEventListener('beforeunload', () => {
-        // IndexedDB is async, so the scheduled save is flushed as early as possible.
-        saveNotebook();
-      });
-
+      window.addEventListener('beforeunload', () => { saveNotebook(); });
       console.log('[Code Nest IndexedDB] V0.5.0 ready', { projectId });
     } catch (error) {
       console.warn('[Code Nest IndexedDB] bootstrap failed; existing storage remains active', error);
     }
   }
 
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', bootstrap, { once: true });
-  } else {
-    bootstrap();
-  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootstrap, { once: true });
+  else bootstrap();
 })();
