@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@600;700;800&family=Noto+Sans+JP:wght@400;500;600;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="dashboard.css?v=49">
+<link rel="stylesheet" href="dashboard.css?v=50">
 </head>
 <body>
 <header class="wrap top">
@@ -34,6 +34,22 @@
   <section class="projects" id="projects" aria-label="プロジェクト一覧"></section>
 </main>
 <div class="toast" id="dashboardToast" role="status" aria-live="polite"></div>
-<script src="dashboard.js?v=49"></script>
+
+<div class="name-modal" id="projectNameModal" hidden>
+  <form class="name-dialog" id="projectNameForm">
+    <h2 id="projectNameHeading">新しいプロジェクト</h2>
+    <p id="projectNameDescription">プロジェクト名を入力してください。</p>
+    <label class="name-field" for="projectNameInput">
+      プロジェクト名
+      <input id="projectNameInput" type="text" maxlength="80" autocomplete="off" spellcheck="false" placeholder="My Project">
+    </label>
+    <div class="name-actions">
+      <button class="name-cancel" type="button" id="projectNameCancel">キャンセル</button>
+      <button class="name-submit" type="submit" id="projectNameSubmit">作成</button>
+    </div>
+  </form>
+</div>
+
+<script src="dashboard.js?v=50"></script>
 </body>
 </html>
