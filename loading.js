@@ -1,4 +1,4 @@
-// Code Nest runtime loader V0.6.0
+// Code Nest runtime loader V0.6.1
 (() => {
   'use strict';
 
@@ -7,7 +7,7 @@
   }
 
   if (!document.querySelector('script[data-code-nest-cells-sandbox]')) {
-    document.write('<script src="cell-sandbox.js?v=47" data-code-nest-cells-sandbox><\\/script>');
+    document.write('<script src="cell-sandbox.js?v=48" data-code-nest-cells-sandbox><\\/script>');
   }
 
   // IndexedDB project store and legacy bridge are kept for existing projects.
@@ -30,9 +30,14 @@
   function setVersion() {
     document.querySelectorAll('.sidebar-footer span').forEach((el) => {
       if (/^V0\.3\.\d+$/i.test(el.textContent.trim()) || /^V0\.4\.\d+(?:\.\d+)?$/i.test(el.textContent.trim()) || /^V0\.5\.\d+(?:\.\d+)?$/i.test(el.textContent.trim()) || /^V0\.6\.\d+(?:\.\d+)?$/i.test(el.textContent.trim())) {
-        el.textContent = 'V0.6.0';
+        el.textContent = 'V0.6.1';
       }
     });
+  }
+
+  function sharedPreviewUrl(url) {
+    const workerPreview = `${url}${url.includes('?') ? '&' : '?'}view=preview`;
+    return `${new URL('./shared-preview.html', location.href).href}?url=${encodeURIComponent(workerPreview)}`;
   }
 
   function shareSnapshot() {
@@ -66,14 +71,14 @@
       if (!result.url) throw new Error('Worker did not return a share URL');
       const base = result.url;
       const codeUrl = `${base}${base.includes('?') ? '&' : '?'}view=code`;
-      const previewUrl = `${base}${base.includes('?') ? '&' : '?'}view=preview`;
+      const previewUrl = sharedPreviewUrl(base);
       document.querySelector('#shareV43Result')?.remove();
       const box = document.createElement('div');
       box.id = 'shareV43Result';
       box.style.cssText = 'position:fixed;inset:0;z-index:2147483001;display:grid;place-items:center;background:rgba(15,18,30,.45);backdrop-filter:blur(8px);padding:20px';
       box.innerHTML = `<div style="width:min(640px,100%);background:#fff;color:#111827;border-radius:20px;padding:22px;box-shadow:0 24px 90px rgba(0,0,0,.3)">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><strong style="font-size:20px">Share your project</strong><button type="button" id="shareV43Close" style="border:0;background:none;font-size:26px;cursor:pointer">×</button></div>
-        <p style="margin:6px 0 16px;color:#64748b;font-size:12px">共有URLを作成しました。</p>
+        <p style="margin:6px 0 16px;color:#64748b;font-size:12px">共有URLを作成しました。プレビューは安全確認画面を経由します。</p>
         <label style="display:block;font-size:11px;font-weight:700;margin-top:10px">CODE<input readonly value="${codeUrl.replace(/"/g,'&quot;')}" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #ddd;border-radius:10px"></label>
         <label style="display:block;font-size:11px;font-weight:700;margin-top:10px">PREVIEW<input readonly value="${previewUrl.replace(/"/g,'&quot;')}" style="display:block;width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #ddd;border-radius:10px"></label>
         <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px"><button type="button" id="shareV43Code" style="padding:9px 12px;border:1px solid #ddd;border-radius:10px;background:#fff;cursor:pointer">コードを開く</button><button type="button" id="shareV43Preview" style="padding:9px 12px;border:1px solid #ddd;border-radius:10px;background:#fff;cursor:pointer">プレビューを開く</button></div>
@@ -85,7 +90,7 @@
       box.addEventListener('click', (event) => { if (event.target === box) box.remove(); });
       button.textContent = '✓ 共有済み';
     } catch (error) {
-      console.error('[Code Nest Share V0.6.0] FAILED', error);
+      console.error('[Code Nest Share V0.6.1] FAILED', error);
       alert(`共有に失敗しました\n${error?.message || error}`);
       button.innerHTML = original;
     } finally {
@@ -120,7 +125,7 @@
       }
       if (typeof window.showToast === 'function') window.showToast('コードセルをすべて実行しました');
     } catch (error) {
-      console.error('[Code Nest RunAll V0.6.0] FAILED', error);
+      console.error('[Code Nest RunAll V0.6.1] FAILED', error);
       if (typeof window.showToast === 'function') window.showToast('すべて実行中にエラーが発生しました');
     } finally {
       button.disabled = false; button.dataset.runAllBusy = '0'; button.innerHTML = original;
@@ -141,5 +146,5 @@
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
   else boot();
 
-  console.log('[Code Nest] runtime loader V0.6.0 ready');
+  console.log('[Code Nest] runtime loader V0.6.1 ready');
 })();
