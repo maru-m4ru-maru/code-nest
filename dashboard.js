@@ -1,4 +1,4 @@
-/* Code Nest Dashboard V0.4.9 */
+/* Code Nest Dashboard V0.4.10 */
 (() => {
   'use strict';
 
@@ -8,7 +8,16 @@
   const searchInput = document.getElementById('projectSearch');
   const sortSelect = document.getElementById('projectSort');
   const toast = document.getElementById('dashboardToast');
+  const nameModal = document.getElementById('projectNameModal');
+  const nameForm = document.getElementById('projectNameForm');
+  const nameInput = document.getElementById('projectNameInput');
+  const nameHeading = document.getElementById('projectNameHeading');
+  const nameDescription = document.getElementById('projectNameDescription');
+  const nameSubmit = document.getElementById('projectNameSubmit');
+  const nameCancel = document.getElementById('projectNameCancel');
   let dragId = null;
+  let nameMode = 'create';
+  let renameProjectId = null;
 
   const esc = (value) => String(value).replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -125,10 +134,29 @@
     return `p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
   }
 
-  function create() {
-    const title = window.prompt('プロジェクト名を入力してください', 'Untitled Project');
-    if (title === null) return;
-    const clean = title.trim() || 'Untitled Project';
+  function closeNameDialog() {
+    nameModal.hidden = true;
+    nameInput.value = '';
+    renameProjectId = null;
+  }
+
+  function openNameDialog(mode, project) {
+    nameMode = mode;
+    renameProjectId = project?.id || null;
+    const isRename = mode === 'rename';
+    nameHeading.textContent = isRename ? 'プロジェクト名を変更' : '新しいプロジェクト';
+    nameDescription.textContent = isRename ? '新しい名前を入力してください。' : 'プロジェクト名を入力してください。';
+    nameInput.value = isRename ? (project?.title || '') : '';
+    nameSubmit.textContent = isRename ? '変更' : '作成';
+    nameModal.hidden = false;
+    requestAnimationFrame(() => {
+      nameInput.focus();
+      nameInput.select();
+    });
+  }
+
+  function create(title) {
+    const clean = String(title || '').trim() || 'Untitled Project';
     const id = makeId();
     const list = normalizeOrder(read());
     const now = Date.now();
@@ -137,13 +165,11 @@
     location.href = `./studio.html?project=${encodeURIComponent(id)}&name=${encodeURIComponent(clean)}`;
   }
 
-  function rename(id) {
+  function rename(id, title) {
     const list = read();
     const project = list.find((p) => p.id === id);
     if (!project) return;
-    const title = window.prompt('新しいプロジェクト名', project.title || 'Untitled Project');
-    if (title === null) return;
-    project.title = title.trim() || 'Untitled Project';
+    project.title = String(title || '').trim() || 'Untitled Project';
     project.updatedAt = Date.now();
     write(normalizeOrder(list));
     render();
@@ -209,6 +235,33 @@
     });
   }
 
+  nameForm?.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const title = nameInput.value.trim();
+    if (!title) {
+      nameInput.focus();
+      nameInput.select();
+      return;
+    }
+
+    if (nameMode === 'rename' && renameProjectId) {
+      rename(renameProjectId, title);
+      closeNameDialog();
+      return;
+    }
+
+    closeNameDialog();
+    create(title);
+  });
+
+  nameCancel?.addEventListener('click', closeNameDialog);
+  nameModal?.addEventListener('click', (event) => {
+    if (event.target === nameModal) closeNameDialog();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && nameModal && !nameModal.hidden) closeNameDialog();
+  });
+
   root.addEventListener('click', (event) => {
     const target = event.target;
     const openButton = target.closest('[data-open]');
@@ -216,18 +269,21 @@
     const deleteButton = target.closest('[data-delete]');
     const emptyCreate = target.closest('[data-create-empty]');
     if (openButton) return open(openButton.dataset.open);
-    if (renameButton) return rename(renameButton.dataset.rename);
+    if (renameButton) {
+      const project = read().find((p) => p.id === renameButton.dataset.rename);
+      if (project) openNameDialog('rename', project);
+      return;
+    }
     if (deleteButton) return remove(deleteButton.dataset.delete);
-    if (emptyCreate) return create();
+    if (emptyCreate) return openNameDialog('create');
   });
 
-  document.getElementById('newProject')?.addEventListener('click', create);
+  document.getElementById('newProject')?.addEventListener('click', () => openNameDialog('create'));
   document.getElementById('studioBtn')?.addEventListener('click', () => { location.href = './studio.html'; });
   searchInput?.addEventListener('input', render);
   sortSelect?.addEventListener('change', render);
 
-  // Persist the currently known order, adding order fields to projects made by older versions.
   saveOrdered(read());
   render();
-  console.log('[Code Nest Dashboard] V0.4.9 ready');
+  console.log('[Code Nest Dashboard] V0.4.10 ready');
 })();
