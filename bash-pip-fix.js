@@ -1,4 +1,4 @@
-/* Code Nest Bash pip bridge V0.4.4 */
+/* Code Nest Bash pip bridge V0.4.5 */
 (() => {
   'use strict';
 
@@ -19,19 +19,9 @@
     root.scrollTop = root.scrollHeight;
   }
 
-  async function handle(event) {
-    const input = document.getElementById('bashInput');
-    if (!input) return;
-
-    const command = String(input.value || '').trim();
+  async function runPip(command, input) {
     const match = isPipInstall(command);
-    if (!match) return;
-
-    // Stop the generic Bash runtime from receiving `pip`, which otherwise
-    // reports that package managers are unavailable in its sandbox.
-    event.preventDefault();
-    event.stopPropagation();
-    event.stopImmediatePropagation();
+    if (!match) return false;
 
     const spec = match[1].trim();
     log('INTERCEPT', command);
@@ -39,10 +29,11 @@
 
     if (typeof globalThis.codeNestPipInstall !== 'function') {
       print('pip bridge is not ready. Reload Code Nest and try again.', 'bash-error');
-      return;
+      log('BRIDGE NOT READY');
+      return true;
     }
 
-    input.value = '';
+    if (input) input.value = '';
 
     try {
       log('INSTALL', spec);
@@ -53,14 +44,47 @@
       log('FAILED', error);
       print(String(error && error.message || error), 'bash-error');
     }
+    return true;
+  }
+
+  async function handleSubmit(event) {
+    const input = document.getElementById('bashInput');
+    if (!input) return;
+    const command = String(input.value || '').trim();
+    if (!isPipInstall(command)) return;
+
+    // Capture before the normal Bash/app.js handlers can route pip to the shell.
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    await runPip(command, input);
+  }
+
+  async function handleKeydown(event) {
+    if (event.key !== 'Enter' || event.isComposing) return;
+    const input = event.target?.closest?.('#bashInput');
+    if (!input) return;
+
+    const command = String(input.value || '').trim();
+    if (!isPipInstall(command)) return;
+
+    // Some browser/keyboard paths trigger the input handler directly instead
+    // of dispatching the form submit event. Catch that path as well.
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+    await runPip(command, input);
   }
 
   function init() {
     const form = document.getElementById('bashForm');
-    if (!form || form.dataset.codeNestPipFix === '1') return;
+    const input = document.getElementById('bashInput');
+    if (!form || !input || form.dataset.codeNestPipFix === '1') return;
+
     form.dataset.codeNestPipFix = '1';
-    form.addEventListener('submit', handle, true);
-    log('READY V0.4.4');
+    form.addEventListener('submit', handleSubmit, true);
+    input.addEventListener('keydown', handleKeydown, true);
+    log('READY V0.4.5');
   }
 
   if (document.readyState === 'loading') {
@@ -68,4 +92,9 @@
   } else {
     init();
   }
+
+  // Bash modal elements are already in studio.html, but retry once after the
+  // next task in case another runtime inserted/replaced them during startup.
+  setTimeout(init, 0);
+  setTimeout(init, 250);
 })();
