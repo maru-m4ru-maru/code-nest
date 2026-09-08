@@ -1,4 +1,4 @@
-// Code Nest runtime loader V0.4.5.1
+// Code Nest runtime loader V0.4.5.2
 (() => {
   'use strict';
 
@@ -7,14 +7,13 @@
     document.write('<script src="preview-v4.js?v=40" data-code-nest-preview-v4><\\/script>');
   }
 
-  // IMPORTANT: bash-pip-fix.js is loaded directly by studio.html AFTER pip.js
-  // and bash-wasm.js. Loading it here would run it before codeNestPipInstall
-  // exists, causing a false "pip bridge is not ready" error.
+  // bash-pip-fix.js is loaded directly by studio.html. It can also load pip.js
+  // itself as a fallback when the bridge has not registered yet.
 
   function setVersion() {
     document.querySelectorAll('.sidebar-footer span').forEach((el) => {
       if (/^V0\.3\.\d+$/i.test(el.textContent.trim()) || /^V0\.4\.\d+(?:\.\d+)?$/i.test(el.textContent.trim())) {
-        el.textContent = 'V0.4.5.1';
+        el.textContent = 'V0.4.5.2';
       }
     });
   }
@@ -91,7 +90,6 @@
     }
   }
 
-  // Keep the known-working Share path isolated from the pip fix.
   document.addEventListener('click', (event) => {
     const button = event.target?.closest?.('#shareBtn');
     if (!button) return;
@@ -150,5 +148,5 @@
     setVersion();
   }
 
-  console.log('[Code Nest] runtime loader V0.4.5.1 ready');
+  console.log('[Code Nest] runtime loader V0.4.5.2 ready');
 })();
