@@ -1,4 +1,4 @@
-// Code Nest runtime loader V0.5.8
+// Code Nest runtime loader V0.6.0
 (() => {
   'use strict';
 
@@ -10,22 +10,27 @@
     document.write('<script src="cell-sandbox.js?v=47" data-code-nest-cells-sandbox><\\/script>');
   }
 
-  // IndexedDB is authoritative. Load the async project store and then the
-  // synchronous project-local runtime bridge BEFORE app.js.
+  // IndexedDB project store and legacy bridge are kept for existing projects.
+  // The direct notebook store below is authoritative for Studio notebook data.
   if (!document.querySelector('script[data-code-nest-project-idb]')) {
-    document.write('<script src="project-idb.js?v=58" data-code-nest-project-idb><\\/script>');
+    document.write('<script src="project-idb.js?v=60" data-code-nest-project-idb><\\/script>');
   }
   if (!document.querySelector('script[data-code-nest-project-idb-runtime]')) {
-    document.write('<script src="project-idb-runtime.js?v=58" data-code-nest-project-idb-runtime><\\/script>');
+    document.write('<script src="project-idb-runtime.js?v=60" data-code-nest-project-idb-runtime><\\/script>');
   }
-  if (!document.querySelector('script[data-code-nest-app-compat]')) {
-    document.write('<script src="app-storage-compat.js?v=58" data-code-nest-app-compat><\\/script>');
+
+  function loadDirectNotebookStore() {
+    if (document.querySelector('script[data-code-nest-project-notebook]')) return;
+    const script = document.createElement('script');
+    script.src = 'project-notebook.js?v=61';
+    script.dataset.codeNestProjectNotebook = '1';
+    document.body.appendChild(script);
   }
 
   function setVersion() {
     document.querySelectorAll('.sidebar-footer span').forEach((el) => {
-      if (/^V0\.3\.\d+$/i.test(el.textContent.trim()) || /^V0\.4\.\d+(?:\.\d+)?$/i.test(el.textContent.trim()) || /^V0\.5\.\d+(?:\.\d+)?$/i.test(el.textContent.trim())) {
-        el.textContent = 'V0.5.8';
+      if (/^V0\.3\.\d+$/i.test(el.textContent.trim()) || /^V0\.4\.\d+(?:\.\d+)?$/i.test(el.textContent.trim()) || /^V0\.5\.\d+(?:\.\d+)?$/i.test(el.textContent.trim()) || /^V0\.6\.\d+(?:\.\d+)?$/i.test(el.textContent.trim())) {
+        el.textContent = 'V0.6.0';
       }
     });
   }
@@ -80,7 +85,7 @@
       box.addEventListener('click', (event) => { if (event.target === box) box.remove(); });
       button.textContent = '✓ 共有済み';
     } catch (error) {
-      console.error('[Code Nest Share V0.5.8] FAILED', error);
+      console.error('[Code Nest Share V0.6.0] FAILED', error);
       alert(`共有に失敗しました\n${error?.message || error}`);
       button.innerHTML = original;
     } finally {
@@ -115,7 +120,7 @@
       }
       if (typeof window.showToast === 'function') window.showToast('コードセルをすべて実行しました');
     } catch (error) {
-      console.error('[Code Nest RunAll V0.5.8] FAILED', error);
+      console.error('[Code Nest RunAll V0.6.0] FAILED', error);
       if (typeof window.showToast === 'function') window.showToast('すべて実行中にエラーが発生しました');
     } finally {
       button.disabled = false; button.dataset.runAllBusy = '0'; button.innerHTML = original;
@@ -129,8 +134,12 @@
     runAllDirect(button);
   }, true);
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', setVersion, { once: true });
-  else setVersion();
+  const boot = () => {
+    setVersion();
+    loadDirectNotebookStore();
+  };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot, { once: true });
+  else boot();
 
-  console.log('[Code Nest] runtime loader V0.5.8 ready');
+  console.log('[Code Nest] runtime loader V0.6.0 ready');
 })();
