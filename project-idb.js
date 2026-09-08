@@ -1,4 +1,4 @@
-/* Code Nest IndexedDB Project Store V0.5.2 */
+/* Code Nest IndexedDB Project Store V0.5.3 */
 (() => {
   'use strict';
 
@@ -33,8 +33,8 @@
   let dbPromise;
   let notebookCache = null;
   let fsCache = null;
-  let persistTimer = null;
-  let syncingFromStorage = false;
+  let notebookTimer = null;
+  let fsTimer = null;
 
   const cacheKey = (kind) => `${CACHE_PREFIX}${projectId}.${kind}`;
 
@@ -133,9 +133,8 @@
     if (await get(PROJECTS, MIGRATION_MARKER)) return;
 
     const legacyMeta = readLegacyMeta();
-    let projects = await getAll(PROJECTS);
-    projects = projects.filter((item) => item?.id && !item.id.startsWith('__migration_'));
-    const projectMap = new Map(projects.map((item) => [item.id, item]));
+    const existingProjects = (await getAll(PROJECTS)).filter((item) => item?.id && !item.id.startsWith('__migration_'));
+    const projectMap = new Map(existingProjects.map((item) => [item.id, item]));
     const now = Date.now();
 
     for (let index = 0; index < legacyMeta.length; index++) {
@@ -152,7 +151,8 @@
       });
     }
 
-    if (!projectMap.has('default') && !legacyMeta.some((item) => item?.id === 'default')) {
+    const hasDefault = legacyMeta.some((item) => item?.id === 'default') || projectMap.has('default');
+    if (!hasDefault) {
       const oldNotebook = readLocal(OLD_NOTEBOOK_KEY);
       await put(PROJECTS, {
         id: 'default',
@@ -163,28 +163,33 @@
       });
     }
 
-    const allProjects = await getAll(PROJECTS);
-    for (const meta of allProjects.filter((item) => item?.id && !item.id.startsWith('__migration_'))) {
+    const allProjects = (await getAll(PROJECTS)).filter((item) => item?.id && !item.id.startsWith('__migration_'));
+    for (const meta of allProjects) {
       const scopedNotebook = readLocal(`${PREFIX}${meta.id}.notebook`);
       const scopedFs = readLocal(`${PREFIX}${meta.id}.fs`);
       const oldNotebook = meta.id === 'default' ? readLocal(OLD_NOTEBOOK_KEY) : null;
       const oldFs = meta.id === 'default' ? readLocal(OLD_FS_KEY) : null;
-
       const existingNotebook = await get(NOTEBOOKS, meta.id);
+      const existingFs = await get(FILESYSTEMS, meta.id);
+
       const notebook = scopedNotebook && Array.isArray(scopedNotebook.cells)
         ? scopedNotebook
         : oldNotebook && Array.isArray(oldNotebook.cells)
           ? oldNotebook
           : existingNotebook || { title: meta.title || 'Untitled Project', cells: clone(starter) };
 
-      const existingFs = await get(FILESYSTEMS, meta.id);
       const fs = scopedFs && typeof scopedFs === 'object' && !Array.isArray(scopedFs)
         ? scopedFs
         : oldFs && typeof oldFs === 'object' && !Array.isArray(oldFs)
           ? oldFs
           : existingFs?.fs || clone(defaultFs);
 
-      await put(NOTEBOOKS, { id: meta.id, ...notebook, title: meta.title || notebook.title || 'Untitled Project', updatedAt: notebook.updatedAt || meta.updatedAt || now });
+      await put(NOTEBOOKS, {
+        id: meta.id,
+        ...notebook,
+        title: meta.title || notebook.title || 'Untitled Project',
+        updatedAt: notebook.updatedAt || meta.updatedAt || now
+      });
       await put(FILESYSTEMS, { id: meta.id, fs: clone(fs), updatedAt: existingFs?.updatedAt || now });
     }
 
@@ -200,13 +205,7 @@
     if (meta) return meta;
     const projects = await listProjects();
     const now = Date.now();
-    meta = {
-      id: projectId,
-      title: params.get('name') || 'Untitled Project',
-      createdAt: now,
-      updatedAt: now,
-      order: projects.length
-    };
+    meta = { id: projectId, title: params.get('name') || 'Untitled Project', createdAt: now, updatedAt: now, order: projects.length };
     await put(PROJECTS, meta);
     return meta;
   }
@@ -218,9 +217,7 @@
 
     if (!notebook) {
       const legacy = readLocal(`${PREFIX}${projectId}.notebook`) || (projectId === 'default' ? readLocal(OLD_NOTEBOOK_KEY) : null);
-      notebook = legacy && Array.isArray(legacy.cells)
-        ? legacy
-        : { title: meta?.title || 'Untitled Project', cells: clone(starter) };
+      notebook = legacy && Array.isArray(legacy.cells) ? legacy : { title: meta?.title || 'Untitled Project', cells: clone(starter) };
       await put(NOTEBOOKS, { id: projectId, ...notebook, title: meta?.title || notebook.title || 'Untitled Project', updatedAt: Date.now() });
     }
 
@@ -235,11 +232,7 @@
   }
 
   function cacheReady() {
-    try {
-      return sessionStorage.getItem(cacheKey('ready')) === '1';
-    } catch (_) {
-      return false;
-    }
+    try { return sessionStorage.getItem(cacheKey('ready')) === '1'; } catch (_) { return false; }
   }
 
   function setCacheReady() {
@@ -249,7 +242,6 @@
   function installStorageBridge() {
     if (!inStudio || globalThis.__codeNestIDBStorageBridge) return;
     globalThis.__codeNestIDBStorageBridge = true;
-
     const nativeGet = Storage.prototype.getItem;
     const nativeSet = Storage.prototype.setItem;
     const nativeRemove = Storage.prototype.removeItem;
@@ -300,9 +292,9 @@
   }
 
   function queuePersistNotebook() {
-    clearTimeout(persistTimer);
-    persistTimer = setTimeout(async () => {
-      if (!notebookCache || syncingFromStorage) return;
+    clearTimeout(notebookTimer);
+    notebookTimer = setTimeout(async () => {
+      if (!notebookCache) return;
       try {
         const now = Date.now();
         await put(NOTEBOOKS, { id: projectId, ...clone(notebookCache), updatedAt: now });
@@ -315,32 +307,28 @@
   }
 
   function queuePersistFs() {
-    clearTimeout(persistTimer);
-    persistTimer = setTimeout(async () => {
-      if (!fsCache || syncingFromStorage) return;
+    clearTimeout(fsTimer);
+    fsTimer = setTimeout(async () => {
+      if (!fsCache) return;
       try { await put(FILESYSTEMS, { id: projectId, fs: clone(fsCache), updatedAt: Date.now() }); }
       catch (error) { console.warn('[Code Nest IndexedDB] filesystem save failed', error); }
     }, 80);
   }
 
-  async function updateStudioTitleFromIdb(title) {
-    const clean = String(title || '').trim() || 'Untitled Project';
-    const input = document.getElementById('titleInput');
-    if (input) input.value = clean;
-    const crumb = document.getElementById('crumbTitle');
-    if (crumb) crumb.textContent = clean;
+  function updateStorageLabel() {
+    const label = document.getElementById('storageState');
+    if (label) label.textContent = 'IndexedDB';
   }
 
   async function bootstrapStudio() {
     await migrateOnce();
     const data = await loadProjectData();
-    await ensureProject();
-
+    const meta = await ensureProject();
     const cachedNotebook = readSession(cacheKey('notebook'));
     const cachedFs = readSession(cacheKey('fs'));
 
-    // First open in this tab: seed a synchronous per-project runtime cache from IndexedDB,
-    // then reload once so the legacy synchronous app can start from the correct project.
+    // This one-time reload puts the asynchronous IndexedDB data into a synchronous
+    // per-project runtime cache before app.js performs its initial synchronous read.
     if (!cacheReady() || !cachedNotebook || !cachedFs) {
       notebookCache = clone(data.notebook);
       fsCache = clone(data.fs);
@@ -354,18 +342,21 @@
     notebookCache = cachedNotebook;
     fsCache = cachedFs;
     installStorageBridge();
+    updateStorageLabel();
 
-    // Dashboard is authoritative for project title. Keep the notebook title mirrored.
-    const meta = await get(PROJECTS, projectId);
+    // Dashboard and Studio share one title record in IndexedDB.
     if (meta?.title && notebookCache && notebookCache.title !== meta.title) {
       notebookCache.title = meta.title;
       writeSession(cacheKey('notebook'), notebookCache);
       await put(NOTEBOOKS, { id: projectId, ...clone(notebookCache), updatedAt: Date.now() });
     }
 
-    // App.js has already rendered using the same project-scoped runtime cache.
-    // No synthetic input events are fired, so navigation cannot accidentally save another project's state.
-    await updateStudioTitleFromIdb(meta?.title || notebookCache?.title);
+    const input = document.getElementById('titleInput');
+    const crumb = document.getElementById('crumbTitle');
+    const cleanTitle = meta?.title || notebookCache?.title || 'Untitled Project';
+    if (input) input.value = cleanTitle;
+    if (crumb) crumb.textContent = cleanTitle;
+
     console.log('[Code Nest IndexedDB] Studio storage ready', { projectId });
   }
 
@@ -394,13 +385,12 @@
     if (meta) await put(PROJECTS, { ...meta, title: clean, updatedAt: now });
     const notebook = await get(NOTEBOOKS, id);
     if (notebook) await put(NOTEBOOKS, { ...notebook, title: clean, updatedAt: now });
-    try {
-      const currentMeta = JSON.parse(sessionStorage.getItem(cacheKey('notebook')) || 'null');
-      if (id === projectId && currentMeta) {
-        currentMeta.title = clean;
-        writeSession(cacheKey('notebook'), currentMeta);
-      }
-    } catch (_) {}
+    if (id === projectId) {
+      try {
+        const cached = readSession(cacheKey('notebook'));
+        if (cached) { cached.title = clean; writeSession(cacheKey('notebook'), cached); }
+      } catch (_) {}
+    }
   }
 
   async function deleteProject(id) {
