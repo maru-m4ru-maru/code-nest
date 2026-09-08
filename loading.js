@@ -1,4 +1,4 @@
-// Code Nest runtime loader V0.4.5.2
+// Code Nest runtime loader V0.4.6
 (() => {
   'use strict';
 
@@ -13,7 +13,7 @@
   function setVersion() {
     document.querySelectorAll('.sidebar-footer span').forEach((el) => {
       if (/^V0\.3\.\d+$/i.test(el.textContent.trim()) || /^V0\.4\.\d+(?:\.\d+)?$/i.test(el.textContent.trim())) {
-        el.textContent = 'V0.4.5.2';
+        el.textContent = 'V0.4.6';
       }
     });
   }
@@ -148,5 +148,5 @@
     setVersion();
   }
 
-  console.log('[Code Nest] runtime loader V0.4.5.2 ready');
+  console.log('[Code Nest] runtime loader V0.4.6 ready');
 })();
