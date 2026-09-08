@@ -1,4 +1,4 @@
-// Code Nest runtime loader V0.4.4
+// Code Nest runtime loader V0.4.5
 (() => {
   'use strict';
 
@@ -10,13 +10,13 @@
   // Load only the Bash -> pip bridge here. It intercepts pip install commands
   // before the generic Bash runtime can reject package-manager commands.
   if (!document.querySelector('script[data-code-nest-bash-pip-fix]')) {
-    document.write('<script src="bash-pip-fix.js?v=44" data-code-nest-bash-pip-fix><\\/script>');
+    document.write('<script src="bash-pip-fix.js?v=45" data-code-nest-bash-pip-fix><\\/script>');
   }
 
   function setVersion() {
     document.querySelectorAll('.sidebar-footer span').forEach((el) => {
       if (/^V0\.3\.\d+$/i.test(el.textContent.trim()) || /^V0\.4\.\d+$/i.test(el.textContent.trim())) {
-        el.textContent = 'V0.4.4';
+        el.textContent = 'V0.4.5';
       }
     });
   }
@@ -152,5 +152,5 @@
     setVersion();
   }
 
-  console.log('[Code Nest] runtime loader V0.4.4 ready');
+  console.log('[Code Nest] runtime loader V0.4.5 ready');
 })();
