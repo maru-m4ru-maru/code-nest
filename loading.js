@@ -1,4 +1,4 @@
-// Code Nest runtime loader V0.4.8
+// Code Nest runtime loader V0.5.1
 (() => {
   'use strict';
 
@@ -11,22 +11,13 @@
     document.write('<script src="cell-sandbox.js?v=47" data-code-nest-cells-sandbox><\\/script>');
   }
 
-  // Project storage must load before app.js so the existing notebook and
-  // browser filesystem are automatically scoped to ?project=<id>.
-  if (!document.querySelector('script[data-code-nest-project-storage]')) {
-    document.write('<script src="project-storage.js?v=48" data-code-nest-project-storage><\\/script>');
-  }
-
-  // Project manager wires the sidebar logo to the Dashboard and keeps the
-  // current project's title metadata up to date.
-  if (!document.querySelector('script[data-code-nest-project-manager]')) {
-    document.write('<script src="project-manager.js?v=48" data-code-nest-project-manager><\\/script>');
-  }
+  // V0.5.1 storage is handled exclusively by IndexedDB in project-idb.js.
+  // Do not load the old LocalStorage project wrappers here.
 
   function setVersion() {
     document.querySelectorAll('.sidebar-footer span').forEach((el) => {
       if (/^V0\.3\.\d+$/i.test(el.textContent.trim()) || /^V0\.4\.\d+(?:\.\d+)?$/i.test(el.textContent.trim())) {
-        el.textContent = 'V0.4.8';
+        el.textContent = 'V0.5.1';
       }
     });
   }
@@ -48,13 +39,9 @@
     const original = button.innerHTML;
     button.disabled = true;
     button.textContent = '⏳ 共有中…';
-    console.log('[Code Nest Share V0.4.3] START');
-
     try {
       const data = shareSnapshot();
-      console.log('[Code Nest Share V0.4.3] SNAPSHOT', { title: data.title, cells: data.cells.length });
       if (!data.cells.length) throw new Error('共有するセルがありません');
-
       const response = await fetch(`${API}/share`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -64,14 +51,11 @@
         const detail = await response.text().catch(() => '');
         throw new Error(detail || `Share failed (${response.status})`);
       }
-
       const result = await response.json();
       if (!result.url) throw new Error('Worker did not return a share URL');
-
       const base = result.url;
       const codeUrl = `${base}${base.includes('?') ? '&' : '?'}view=code`;
       const previewUrl = `${base}${base.includes('?') ? '&' : '?'}view=preview`;
-
       document.querySelector('#shareV43Result')?.remove();
       const box = document.createElement('div');
       box.id = 'shareV43Result';
@@ -90,7 +74,7 @@
       box.addEventListener('click', (event) => { if (event.target === box) box.remove(); });
       button.textContent = '✓ 共有済み';
     } catch (error) {
-      console.error('[Code Nest Share V0.4.3] FAILED', error);
+      console.error('[Code Nest Share V0.5.1] FAILED', error);
       alert(`共有に失敗しました\n${error?.message || error}`);
       button.innerHTML = original;
     } finally {
@@ -128,7 +112,7 @@
       }
       if (typeof window.showToast === 'function') window.showToast('コードセルをすべて実行しました');
     } catch (error) {
-      console.error('[Code Nest RunAll V0.4.3] FAILED', error);
+      console.error('[Code Nest RunAll V0.5.1] FAILED', error);
       if (typeof window.showToast === 'function') window.showToast('すべて実行中にエラーが発生しました');
     } finally {
       button.disabled = false;
@@ -152,5 +136,5 @@
     setVersion();
   }
 
-  console.log('[Code Nest] runtime loader V0.4.8 ready');
+  console.log('[Code Nest] runtime loader V0.5.1 ready');
 })();
