@@ -1,4 +1,4 @@
-/* Code Nest Dashboard V0.4.9 */
+/* Code Nest Dashboard V0.4.10 */
 :root{--bg:#f4f6fb;--surface:#fff;--line:#e1e5ee;--text:#172033;--muted:#7b8495;--accent:#5b5ce2;--accent2:#7b61ff;--danger:#a33f5e}
 *{box-sizing:border-box}
 html{scroll-behavior:smooth}
@@ -45,5 +45,18 @@ button{cursor:pointer}
 .hint{grid-column:1/-1;text-align:center;color:#98a0b0;font-size:10px;padding-bottom:10px}
 .toast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,16px);padding:10px 14px;border-radius:11px;background:#1f2a44;color:#fff;font-size:12px;font-weight:700;opacity:0;pointer-events:none;transition:.18s ease;z-index:30;box-shadow:0 12px 35px rgba(15,23,42,.22)}
 .toast.show{opacity:1;transform:translate(-50%,0)}
+.name-modal{position:fixed;inset:0;z-index:100;display:grid;place-items:center;padding:20px;background:rgba(15,23,42,.38);backdrop-filter:blur(8px)}
+.name-modal[hidden]{display:none}
+.name-dialog{width:min(460px,100%);background:#fff;border:1px solid #e1e5ee;border-radius:20px;padding:22px;box-shadow:0 24px 90px rgba(15,23,42,.24);animation:nameDialogIn .16s ease}
+.name-dialog h2{margin:0;font-size:18px;letter-spacing:-.02em}
+.name-dialog p{margin:5px 0 16px;color:var(--muted);font-size:12px}
+.name-field{display:block;font-size:11px;font-weight:800;color:#5f687b}
+.name-field input{display:block;width:100%;margin-top:6px;padding:12px 13px;border:1px solid #cfd5e3;border-radius:11px;outline:none;background:#fff;color:var(--text)}
+.name-field input:focus{border-color:#9fa5ea;box-shadow:0 0 0 4px #5b5ce214}
+.name-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:17px}
+.name-actions button{padding:9px 13px;border-radius:10px;font-weight:800}
+.name-cancel{border:1px solid var(--line);background:#fff;color:#566177}
+.name-submit{border:0;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#fff;min-width:82px}
+@keyframes nameDialogIn{from{opacity:0;transform:translateY(5px) scale(.99)}to{opacity:1;transform:none}}
 @media(max-width:840px){.projects{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:560px){.wrap{width:calc(100% - 24px)}.hero{display:block}.hero-actions{margin-top:16px}.new{width:100%}.toolbar{display:block}.sort{margin-top:8px;width:100%}.projects{grid-template-columns:1fr}.hero h1{font-size:29px}}
+@media(max-width:560px){.wrap{width:calc(100% - 24px)}.hero{display:block}.hero-actions{margin-top:16px}.new{width:100%}.toolbar{display:block}.sort{margin-top:8px;width:100%}.projects{grid-template-columns:1fr}.hero h1{font-size:29px}.name-dialog{padding:19px}.name-actions button{flex:1}}
