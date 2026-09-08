@@ -6,7 +6,7 @@
 <meta name="theme-color" content="#07131d">
 <title>Code Nest — Shared Preview</title>
 <style>
-:root{--bg:#07131d;--panel:#0d1e2a;--line:#24404e;--text:#f3f8fb;--muted:#9cb0bb;--blue:#16b9ff;--warn:#f0c878}
+:root{--bg:#07131d;--panel:#0d1e2a;--line:#24404e;--text:#f3f8fb;--muted:#9cb0bb;--blue:#16b9ff}
 *{box-sizing:border-box}
 body{margin:0;min-height:100vh;background:radial-gradient(circle at 12% 0%,#103044 0,transparent 30%),radial-gradient(circle at 88% 8%,#201642 0,transparent 28%),linear-gradient(180deg,var(--bg),#061018);color:var(--text);font-family:Inter,"Noto Sans JP",system-ui,sans-serif}
 .shell{width:min(1100px,calc(100% - 28px));margin:auto;padding:28px 0}
@@ -21,6 +21,7 @@ button{font:inherit}.btn{border:1px solid var(--line);background:#ffffff08;color
 iframe{display:none;width:100%;height:82vh;border:1px solid var(--line);border-radius:18px;background:#fff;box-shadow:0 25px 80px #0008}
 iframe.visible{display:block}.hidden{display:none!important}
 .back{margin-top:12px;text-align:center;color:#6f8793;font-size:10px}
+.invalid{max-width:620px;margin:15vh auto 0}
 @media(max-width:620px){.card{margin-top:4vh;padding:20px}h1{font-size:24px}.status{margin-left:0}.controls{align-items:stretch}.controls .btn{flex:1}}
 </style>
 </head>
@@ -37,7 +38,7 @@ iframe.visible{display:block}.hidden{display:none!important}
       <button class="btn primary" id="runButton" type="button">▶ 実行</button>
       <span class="status" id="sandboxStatus">Sandbox ON</span>
     </div>
-    <div class="back">初期状態ではSandbox ONです。実行しない場合はこのページを閉じてください。</div>
+    <div class="back">実行しない場合は、このページを閉じてください。</div>
   </section>
 
   <iframe id="previewFrame" title="Code Nest Shared Preview" referrerpolicy="no-referrer"></iframe>
@@ -47,19 +48,14 @@ iframe.visible{display:block}.hidden{display:none!important}
   'use strict';
 
   const params = new URLSearchParams(location.search);
-  const rawUrl = params.get('url') || '';
-  const allowed = new Set(['code-nest-worker.maru-0727.workers.dev']);
+  const id = String(params.get('id') || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80);
+  const workerOrigin = 'https://code-nest-worker.maru-0727.workers.dev';
+  const previewUrl = id ? `${workerOrigin}/share/${encodeURIComponent(id)}?view=preview` : '';
+
   const WARNING =
     '意味の分からないコードは「絶対に」SandboxOFFで実行しないでください。\n\n' +
     '悪意あるコードだった場合、パスワードなどが流出などの悪影響が生じる可能性が高いです。\n\n' +
     'CodeNest開発者は、そのような行為で生じるいかなる問題の責任を一切負いません。';
-
-  let previewUrl = '';
-  try {
-    const u = new URL(rawUrl, location.href);
-    if (u.protocol !== 'https:' || !allowed.has(u.hostname)) throw new Error('invalid preview');
-    previewUrl = u.href;
-  } catch (_) {}
 
   const card = document.getElementById('confirmCard');
   const warning = document.getElementById('warningText');
@@ -72,7 +68,7 @@ iframe.visible{display:block}.hidden{display:none!important}
   let sandboxEnabled = localStorage.getItem('codeNest.sharedPreview.sandbox') !== 'off';
 
   warning.textContent = WARNING;
-  urlEl.textContent = previewUrl || '無効なプレビューURLです。';
+  urlEl.textContent = previewUrl || '無効な共有プレビューです。';
 
   function updateUI(){
     status.textContent = sandboxEnabled ? 'Sandbox ON' : 'Sandbox OFF';
