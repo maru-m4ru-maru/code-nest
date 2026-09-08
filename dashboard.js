@@ -1,9 +1,7 @@
-/* Code Nest Dashboard V0.4.10 */
+/* Code Nest Dashboard V0.5.2 */
 (() => {
   'use strict';
 
-  const META_KEY = 'codeNest.projects.v1';
-  const PREFIX = 'codeNest.project.';
   const root = document.getElementById('projects');
   const searchInput = document.getElementById('projectSearch');
   const sortSelect = document.getElementById('projectSort');
@@ -18,63 +16,11 @@
   let dragId = null;
   let nameMode = 'create';
   let renameProjectId = null;
+  let projectList = [];
 
   const esc = (value) => String(value).replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[c]));
-
-  function read() {
-    try {
-      const value = localStorage.getItem(META_KEY);
-      const list = value ? JSON.parse(value) : [];
-      return Array.isArray(list) ? list.filter(Boolean) : [];
-    } catch (_) {
-      return [];
-    }
-  }
-
-  function write(list) {
-    localStorage.setItem(META_KEY, JSON.stringify(list));
-  }
-
-  function orderValue(project, index) {
-    return Number.isFinite(project.order) ? project.order : index;
-  }
-
-  function normalizeOrder(list) {
-    return [...list]
-      .sort((a, b) => orderValue(a, list.indexOf(a)) - orderValue(b, list.indexOf(b)))
-      .map((project, index) => ({ ...project, order: index }));
-  }
-
-  function saveOrdered(list) {
-    write(normalizeOrder(list));
-  }
-
-  function niceDate(ts) {
-    try {
-      return new Date(ts).toLocaleString('ja-JP', {
-        year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-      });
-    } catch (_) {
-      return '';
-    }
-  }
-
-  function projectNotebook(id) {
-    try {
-      const raw = localStorage.getItem(`${PREFIX}${id}.notebook`);
-      const value = raw ? JSON.parse(raw) : null;
-      return value && typeof value === 'object' ? value : null;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  function cellCount(id) {
-    const notebook = projectNotebook(id);
-    return Array.isArray(notebook?.cells) ? notebook.cells.length : 0;
-  }
 
   function showToast(message) {
     if (!toast) return;
@@ -84,59 +30,75 @@
     showToast.timer = setTimeout(() => toast.classList.remove('show'), 1600);
   }
 
-  function filteredList() {
-    const query = String(searchInput?.value || '').trim().toLowerCase();
-    let list = normalizeOrder(read());
-    if (query) list = list.filter((p) => String(p.title || '').toLowerCase().includes(query));
+  function niceDate(ts) {
+    try {
+      return new Date(ts).toLocaleString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    } catch (_) { return ''; }
+  }
 
+  function normalize(list) {
+    return [...list]
+      .filter((p) => p?.id)
+      .sort((a, b) => (Number.isFinite(a.order) ? a.order : 999999) - (Number.isFinite(b.order) ? b.order : 999999) || (a.createdAt || 0) - (b.createdAt || 0))
+      .map((p, index) => ({ ...p, order: index }));
+  }
+
+  async function refreshProjects() {
+    projectList = normalize(await CodeNestDB.listProjects());
+    return projectList;
+  }
+
+  async function cellCount(id) {
+    try {
+      const notebook = await CodeNestDB.getNotebook(id);
+      return Array.isArray(notebook?.cells) ? notebook.cells.length : 0;
+    } catch (_) { return 0; }
+  }
+
+  async function filteredList() {
+    const query = String(searchInput?.value || '').trim().toLowerCase();
+    let list = [...projectList];
+    if (query) list = list.filter((p) => String(p.title || '').toLowerCase().includes(query));
     const sort = sortSelect?.value || 'order';
     if (sort === 'updated') list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0));
     if (sort === 'name') list.sort((a, b) => String(a.title || '').localeCompare(String(b.title || ''), 'ja'));
     return list;
   }
 
-  function render() {
-    const list = filteredList();
-    const total = read().length;
-
-    if (!total) {
+  async function render() {
+    const list = await filteredList();
+    if (!projectList.length) {
       root.innerHTML = '<div class="empty"><strong>まだプロジェクトがありません</strong><span>「新しいプロジェクト」から最初のNotebookを作ろう。</span><br><button class="new" data-create-empty>＋ 新しいプロジェクト</button></div>';
       return;
     }
-
     if (!list.length) {
       root.innerHTML = '<div class="empty"><strong>見つかりませんでした</strong><span>プロジェクト名を変えて検索してみてください。</span></div>';
       return;
     }
 
-    const cards = list.map((p) => {
+    const counts = await Promise.all(list.map((p) => cellCount(p.id)));
+    root.innerHTML = list.map((p, index) => {
       const title = p.title || 'Untitled Project';
-      const cells = cellCount(p.id);
       return `<article class="card" draggable="true" data-project="${esc(p.id)}">
         <button class="drag-handle" type="button" title="ドラッグして順序を変更" aria-label="${esc(title)}の順序を変更">⋮⋮</button>
         <div class="icon">CN</div>
-        <div class="name" data-name="${esc(p.id)}" title="${esc(title)}">${esc(title)}</div>
+        <div class="name" title="${esc(title)}">${esc(title)}</div>
         <div class="meta">最終更新 ${esc(niceDate(p.updatedAt || p.createdAt || Date.now()))}</div>
-        <div class="stats"><span class="stat">${cells} cells</span><span class="stat">Local</span></div>
+        <div class="stats"><span class="stat">${counts[index]} cells</span><span class="stat">IndexedDB</span></div>
         <div class="actions">
           <button class="open" data-open="${esc(p.id)}">開く</button>
           <button class="rename" data-rename="${esc(p.id)}">名前変更</button>
           <button class="del" data-delete="${esc(p.id)}">削除</button>
         </div>
       </article>`;
-    }).join('');
-
-    root.innerHTML = cards + '<div class="hint">⋮⋮ をドラッグしてプロジェクトの順序を変更できます。順序はこのブラウザに保存されます。</div>';
+    }).join('') + '<div class="hint">⋮⋮ をドラッグしてプロジェクトの順序を変更できます。順序とデータはIndexedDBに保存されます。</div>';
     bindDrag();
   }
 
-  function makeId() {
-    return `p_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`;
-  }
-
   function closeNameDialog() {
+    if (!nameModal) return;
     nameModal.hidden = true;
-    nameInput.value = '';
+    if (nameInput) nameInput.value = '';
     renameProjectId = null;
   }
 
@@ -149,43 +111,30 @@
     nameInput.value = isRename ? (project?.title || '') : '';
     nameSubmit.textContent = isRename ? '変更' : '作成';
     nameModal.hidden = false;
-    requestAnimationFrame(() => {
-      nameInput.focus();
-      nameInput.select();
-    });
+    requestAnimationFrame(() => { nameInput.focus(); nameInput.select(); });
   }
 
-  function create(title) {
-    const clean = String(title || '').trim() || 'Untitled Project';
-    const id = makeId();
-    const list = normalizeOrder(read());
-    const now = Date.now();
-    list.push({ id, title: clean, createdAt: now, updatedAt: now, order: list.length });
-    write(list);
-    location.href = `./studio.html?project=${encodeURIComponent(id)}&name=${encodeURIComponent(clean)}`;
+  async function create(title) {
+    const meta = await CodeNestDB.createProject(title);
+    showToast('プロジェクトを作成しました');
+    location.href = `./studio.html?project=${encodeURIComponent(meta.id)}`;
   }
 
-  function rename(id, title) {
-    const list = read();
-    const project = list.find((p) => p.id === id);
-    if (!project) return;
-    project.title = String(title || '').trim() || 'Untitled Project';
-    project.updatedAt = Date.now();
-    write(normalizeOrder(list));
-    render();
+  async function rename(id, title) {
+    await CodeNestDB.renameProject(id, title);
+    await refreshProjects();
+    await render();
     showToast('プロジェクト名を変更しました');
   }
 
-  function remove(id) {
-    const list = read();
-    const project = list.find((p) => p.id === id);
+  async function removeProject(id) {
+    const project = projectList.find((p) => p.id === id);
     if (!project) return;
     const title = project.title || 'Untitled Project';
     if (!window.confirm(`「${title}」を削除しますか？\nこのブラウザに保存されたプロジェクトデータも削除されます。`)) return;
-    write(normalizeOrder(list.filter((p) => p.id !== id)));
-    localStorage.removeItem(`${PREFIX}${id}.notebook`);
-    localStorage.removeItem(`${PREFIX}${id}.fs`);
-    render();
+    await CodeNestDB.deleteProject(id);
+    await refreshProjects();
+    await render();
     showToast('プロジェクトを削除しました');
   }
 
@@ -193,17 +142,18 @@
     location.href = `./studio.html?project=${encodeURIComponent(id)}`;
   }
 
-  function swapByDrag(fromId, toId) {
+  async function swapByDrag(fromId, toId) {
     if (!fromId || !toId || fromId === toId) return;
-    const list = normalizeOrder(read());
-    const from = list.findIndex((p) => p.id === fromId);
-    const to = list.findIndex((p) => p.id === toId);
+    const ordered = normalize(projectList);
+    const from = ordered.findIndex((p) => p.id === fromId);
+    const to = ordered.findIndex((p) => p.id === toId);
     if (from < 0 || to < 0) return;
-    const [moved] = list.splice(from, 1);
-    list.splice(to, 0, moved);
-    list.forEach((p, index) => { p.order = index; p.updatedAt = p.updatedAt || Date.now(); });
-    write(list);
-    render();
+    const [moved] = ordered.splice(from, 1);
+    ordered.splice(to, 0, moved);
+    ordered.forEach((p, index) => { p.order = index; });
+    await CodeNestDB.reorderProjects(ordered);
+    projectList = ordered;
+    await render();
     showToast('並び順を保存しました');
   }
 
@@ -217,8 +167,8 @@
       });
       card.addEventListener('dragend', () => {
         dragId = null;
-        root.querySelectorAll('.drop-target').forEach((el) => el.classList.remove('drop-target'));
         card.classList.remove('dragging');
+        root.querySelectorAll('.drop-target').forEach((el) => el.classList.remove('drop-target'));
       });
       card.addEventListener('dragover', (event) => {
         event.preventDefault();
@@ -229,38 +179,28 @@
       card.addEventListener('drop', (event) => {
         event.preventDefault();
         card.classList.remove('drop-target');
-        const fromId = dragId || event.dataTransfer.getData('text/plain');
-        swapByDrag(fromId, card.dataset.project);
+        void swapByDrag(dragId || event.dataTransfer.getData('text/plain'), card.dataset.project);
       });
     });
   }
 
-  nameForm?.addEventListener('submit', (event) => {
+  nameForm?.addEventListener('submit', async (event) => {
     event.preventDefault();
     const title = nameInput.value.trim();
-    if (!title) {
-      nameInput.focus();
-      nameInput.select();
-      return;
-    }
-
-    if (nameMode === 'rename' && renameProjectId) {
-      rename(renameProjectId, title);
+    if (!title) { nameInput.focus(); return; }
+    try {
+      if (nameMode === 'rename' && renameProjectId) await rename(renameProjectId, title);
+      else await create(title);
       closeNameDialog();
-      return;
+    } catch (error) {
+      console.error('[Code Nest Dashboard] operation failed', error);
+      showToast('保存に失敗しました');
     }
-
-    closeNameDialog();
-    create(title);
   });
 
   nameCancel?.addEventListener('click', closeNameDialog);
-  nameModal?.addEventListener('click', (event) => {
-    if (event.target === nameModal) closeNameDialog();
-  });
-  document.addEventListener('keydown', (event) => {
-    if (event.key === 'Escape' && nameModal && !nameModal.hidden) closeNameDialog();
-  });
+  nameModal?.addEventListener('click', (event) => { if (event.target === nameModal) closeNameDialog(); });
+  document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && nameModal && !nameModal.hidden) closeNameDialog(); });
 
   root.addEventListener('click', (event) => {
     const target = event.target;
@@ -270,20 +210,28 @@
     const emptyCreate = target.closest('[data-create-empty]');
     if (openButton) return open(openButton.dataset.open);
     if (renameButton) {
-      const project = read().find((p) => p.id === renameButton.dataset.rename);
+      const project = projectList.find((p) => p.id === renameButton.dataset.rename);
       if (project) openNameDialog('rename', project);
       return;
     }
-    if (deleteButton) return remove(deleteButton.dataset.delete);
-    if (emptyCreate) return openNameDialog('create');
+    if (deleteButton) { void removeProject(deleteButton.dataset.delete); return; }
+    if (emptyCreate) { openNameDialog('create'); }
   });
 
   document.getElementById('newProject')?.addEventListener('click', () => openNameDialog('create'));
-  document.getElementById('studioBtn')?.addEventListener('click', () => { location.href = './studio.html'; });
-  searchInput?.addEventListener('input', render);
-  sortSelect?.addEventListener('change', render);
+  document.getElementById('studioBtn')?.addEventListener('click', () => { location.href = './studio.html?project=default'; });
+  searchInput?.addEventListener('input', () => void render());
+  sortSelect?.addEventListener('change', () => void render());
 
-  saveOrdered(read());
-  render();
-  console.log('[Code Nest Dashboard] V0.4.10 ready');
+  void (async () => {
+    try {
+      await CodeNestDB.ready;
+      await refreshProjects();
+      await render();
+      console.log('[Code Nest Dashboard] V0.5.2 ready (IndexedDB)');
+    } catch (error) {
+      console.error('[Code Nest Dashboard] startup failed', error);
+      root.innerHTML = '<div class="empty"><strong>プロジェクトを読み込めませんでした</strong><span>IndexedDBが利用できる環境で再読み込みしてください。</span></div>';
+    }
+  })();
 })();
