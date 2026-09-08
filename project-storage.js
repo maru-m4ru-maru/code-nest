@@ -1,4 +1,4 @@
-/* Code Nest Project Storage V0.4.8 */
+/* Code Nest Project Storage V0.4.9 */
 (() => {
   'use strict';
 
@@ -68,15 +68,27 @@
     return meta;
   }
 
-  // Migrate the old single-project LocalStorage only into the default project.
+  // One-time migration from the old single-project storage into the default project.
+  // After a successful copy, remove the legacy keys so they can never leak data
+  // into another project through an older helper/script.
   if (projectId === 'default') {
-    if (!localStorage.getItem(scoped('notebook')) && localStorage.getItem(OLD_NOTEBOOK_KEY)) {
+    try {
       const oldNotebook = localStorage.getItem(OLD_NOTEBOOK_KEY);
-      localStorage.setItem(scoped('notebook'), oldNotebook);
-    }
-    if (!localStorage.getItem(scoped('fs')) && localStorage.getItem(OLD_FS_KEY)) {
       const oldFs = localStorage.getItem(OLD_FS_KEY);
-      localStorage.setItem(scoped('fs'), oldFs);
+
+      if (!localStorage.getItem(scoped('notebook')) && oldNotebook) {
+        localStorage.setItem(scoped('notebook'), oldNotebook);
+      }
+      if (!localStorage.getItem(scoped('fs')) && oldFs) {
+        localStorage.setItem(scoped('fs'), oldFs);
+      }
+
+      const notebookCopied = !oldNotebook || !!localStorage.getItem(scoped('notebook'));
+      const fsCopied = !oldFs || !!localStorage.getItem(scoped('fs'));
+      if (notebookCopied) localStorage.removeItem(OLD_NOTEBOOK_KEY);
+      if (fsCopied) localStorage.removeItem(OLD_FS_KEY);
+    } catch (error) {
+      console.warn('[Code Nest Project Storage] legacy migration failed', error);
     }
   }
 
@@ -151,5 +163,5 @@
     }
   };
 
-  console.log('[Code Nest Project Storage] V0.4.8 ready', { projectId });
+  console.log('[Code Nest Project Storage] V0.4.9 ready', { projectId });
 })();
