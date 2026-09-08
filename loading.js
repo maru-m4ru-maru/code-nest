@@ -1,4 +1,4 @@
-// Code Nest runtime loader V0.4.7
+// Code Nest runtime loader V0.4.8
 (() => {
   'use strict';
 
@@ -6,16 +6,27 @@
     document.write('<script src="preview-v4.js?v=42" data-code-nest-preview-v4><\\/script>');
   }
 
-  // Cells Sandbox is independent from Bash Sandbox. It controls only the
-  // sandbox state of Code Nest Preview iframes.
+  // Cells Sandbox is independent from Bash Sandbox.
   if (!document.querySelector('script[data-code-nest-cells-sandbox]')) {
     document.write('<script src="cell-sandbox.js?v=47" data-code-nest-cells-sandbox><\\/script>');
+  }
+
+  // Project storage must load before app.js so the existing notebook and
+  // browser filesystem are automatically scoped to ?project=<id>.
+  if (!document.querySelector('script[data-code-nest-project-storage]')) {
+    document.write('<script src="project-storage.js?v=48" data-code-nest-project-storage><\\/script>');
+  }
+
+  // Project manager wires the sidebar logo to the Dashboard and keeps the
+  // current project's title metadata up to date.
+  if (!document.querySelector('script[data-code-nest-project-manager]')) {
+    document.write('<script src="project-manager.js?v=48" data-code-nest-project-manager><\\/script>');
   }
 
   function setVersion() {
     document.querySelectorAll('.sidebar-footer span').forEach((el) => {
       if (/^V0\.3\.\d+$/i.test(el.textContent.trim()) || /^V0\.4\.\d+(?:\.\d+)?$/i.test(el.textContent.trim())) {
-        el.textContent = 'V0.4.7';
+        el.textContent = 'V0.4.8';
       }
     });
   }
@@ -141,5 +152,5 @@
     setVersion();
   }
 
-  console.log('[Code Nest] runtime loader V0.4.7 ready');
+  console.log('[Code Nest] runtime loader V0.4.8 ready');
 })();
