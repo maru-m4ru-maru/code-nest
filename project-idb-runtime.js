@@ -1,4 +1,4 @@
-/* Code Nest IndexedDB synchronous runtime bridge V0.5.5 */
+/* Code Nest IndexedDB synchronous runtime bridge V0.5.6 */
 (() => {
   'use strict';
 
@@ -43,6 +43,7 @@
       tx.objectStore(store).put(value);
       tx.oncomplete = resolve;
       tx.onerror = () => reject(tx.error || new Error('IndexedDB write failed'));
+      tx.onabort = () => reject(tx.error || new Error('IndexedDB transaction aborted'));
     }));
   }
 
@@ -55,36 +56,51 @@
     }));
   }
 
+  async function saveNotebookNow() {
+    if (!lastNotebook) return;
+    try {
+      const now = Date.now();
+      await put(NOTEBOOKS, { id: projectId, ...lastNotebook, updatedAt: now });
+      const meta = await getProject();
+      if (meta) {
+        await put(PROJECTS, {
+          ...meta,
+          title: lastNotebook.title || meta.title || 'Untitled Project',
+          updatedAt: now
+        });
+      }
+    } catch (error) {
+      console.warn('[Code Nest IndexedDB] runtime notebook save failed', error);
+    }
+  }
+
+  async function saveFsNow() {
+    if (!lastFs) return;
+    try {
+      await put(FILESYSTEMS, { id: projectId, fs: lastFs, updatedAt: Date.now() });
+    } catch (error) {
+      console.warn('[Code Nest IndexedDB] runtime filesystem save failed', error);
+    }
+  }
+
   let notebookTimer = null;
   let fsTimer = null;
+  let notebookSavePromise = null;
+  let fsSavePromise = null;
   let lastNotebook = notebook;
   let lastFs = filesystem;
 
   function persistNotebook() {
     clearTimeout(notebookTimer);
-    notebookTimer = setTimeout(async () => {
-      try {
-        const now = Date.now();
-        await put(NOTEBOOKS, { id: projectId, ...lastNotebook, updatedAt: now });
-        const meta = await getProject();
-        if (meta) {
-          await put(PROJECTS, {
-            ...meta,
-            title: lastNotebook.title || meta.title || 'Untitled Project',
-            updatedAt: now
-          });
-        }
-      } catch (error) {
-        console.warn('[Code Nest IndexedDB] runtime notebook save failed', error);
-      }
+    notebookTimer = setTimeout(() => {
+      notebookSavePromise = saveNotebookNow();
     }, 90);
   }
 
   function persistFs() {
     clearTimeout(fsTimer);
     fsTimer = setTimeout(() => {
-      put(FILESYSTEMS, { id: projectId, fs: lastFs, updatedAt: Date.now() })
-        .catch((error) => console.warn('[Code Nest IndexedDB] runtime filesystem save failed', error));
+      fsSavePromise = saveFsNow();
     }, 90);
   }
 
@@ -108,7 +124,9 @@
           lastNotebook = notebook;
           sessionStorage.setItem(notebookKey, JSON.stringify(notebook));
           persistNotebook();
-        } catch (_) {}
+        } catch (error) {
+          console.warn('[Code Nest IndexedDB] notebook bridge parse failed', error);
+        }
         return;
       }
       if (key === 'code-nest-fs-v02') {
@@ -117,7 +135,9 @@
           lastFs = filesystem;
           sessionStorage.setItem(fsKey, JSON.stringify(filesystem));
           persistFs();
-        } catch (_) {}
+        } catch (error) {
+          console.warn('[Code Nest IndexedDB] filesystem bridge parse failed', error);
+        }
         return;
       }
     }
@@ -128,17 +148,31 @@
     if (this === localStorage) {
       if (key === 'code-nest-v02') {
         notebook = null;
+        lastNotebook = null;
+        clearTimeout(notebookTimer);
         sessionStorage.removeItem(notebookKey);
         return;
       }
       if (key === 'code-nest-fs-v02') {
         filesystem = null;
+        lastFs = null;
+        clearTimeout(fsTimer);
         sessionStorage.removeItem(fsKey);
         return;
       }
     }
     return nativeRemove.call(this, key);
   };
+
+  function flush() {
+    clearTimeout(notebookTimer);
+    clearTimeout(fsTimer);
+    if (lastNotebook) notebookSavePromise = saveNotebookNow();
+    if (lastFs) fsSavePromise = saveFsNow();
+  }
+
+  window.addEventListener('pagehide', flush, { capture: true });
+  window.addEventListener('beforeunload', flush, { capture: true });
 
   globalThis.__codeNestIDBStorageBridge = true;
   console.log('[Code Nest IndexedDB] synchronous runtime bridge ready', { projectId });
