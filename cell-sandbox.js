@@ -1,8 +1,12 @@
-/* Code Nest Cells Sandbox V0.4.7 */
+/* Code Nest Cells Sandbox V0.4.8 */
 (() => {
   'use strict';
 
   const KEY = 'codeNest.cells.sandbox';
+  const WARNING =
+    '意味の分からないコードは「絶対に」SandboxOFFで実行しないでください。\n\n' +
+    '悪意あるコードだった場合、パスワードなどが流出などの悪影響が生じる可能性が高いです。\n\n' +
+    'CodeNest開発者は、そのような行為で生じるいかなる問題の責任を一切負いません。';
   const PREFIX = '[Code Nest Cells Sandbox]';
   const log = (...args) => console.log(PREFIX, ...args);
 
@@ -18,9 +22,7 @@
   function applyToFrame(frame) {
     if (!isPreviewFrame(frame)) return;
     if (sandboxEnabled) {
-      if (!frame.hasAttribute('sandbox')) {
-        frame.setAttribute('sandbox', 'allow-scripts');
-      }
+      if (!frame.hasAttribute('sandbox')) frame.setAttribute('sandbox', 'allow-scripts');
     } else {
       frame.removeAttribute('sandbox');
     }
@@ -31,8 +33,6 @@
     globalThis.__codeNestCellsSandbox = sandboxEnabled;
   }
 
-  // Preview V0.4 re-applies sandbox="allow-scripts" when it opens.
-  // Intercept only the two Code Nest preview frames so the user's setting wins.
   if (!globalThis.__codeNestCellsSandboxPatched) {
     const originalSetAttribute = HTMLIFrameElement.prototype.setAttribute;
     const originalRemoveAttribute = HTMLIFrameElement.prototype.removeAttribute;
@@ -91,10 +91,8 @@
   function toggle() {
     if (sandboxEnabled) {
       const confirmed = window.confirm(
-        'Cells SandboxをOFFにしますか？\n\n' +
-        '注意：OFFにすると、HTML/CSS/JavaScriptセルのブラウザPreviewからiframeのSandbox制限が外れます。' +
-        '信頼できないコードを実行しないでください。\n\n' +
-        '※ これはChromeやOSそのもののセキュリティ機構を無効化するものではありません。'
+        'Cells SandboxをOFFにしますか？\n\n' + WARNING + '\n\n' +
+        '※ Sandbox OFFでもブラウザやOSそのもののセキュリティ機構を無効化するものではありません。'
       );
       if (!confirmed) return;
     }
@@ -123,7 +121,8 @@
     isEnabled: () => sandboxEnabled,
     setEnabled: (enabled) => setSandbox(enabled),
     toggle,
-    apply: applyAll
+    apply: applyAll,
+    warning: WARNING
   };
 
   if (document.readyState === 'loading') {
