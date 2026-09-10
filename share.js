@@ -1,5 +1,6 @@
 const SHARE_API = 'https://code-nest-worker.maru-0727.workers.dev';
 const SHARED_PREVIEW_PAGE = './shared-preview.html';
+const SHARED_CODE_PAGE = './shared-code.html';
 
 function snapshotForShare() {
   const title = document.querySelector('#titleInput')?.value || 'Untitled Notebook';
@@ -32,6 +33,11 @@ function makeSafePreviewUrl(url) {
   return `${new URL(SHARED_PREVIEW_PAGE, location.href).href}?url=${encodeURIComponent(workerPreview)}`;
 }
 
+function makeSharedCodeUrl(url) {
+  const id = new URL(url).pathname.split('/').filter(Boolean).pop() || '';
+  return `${new URL(SHARED_CODE_PAGE, location.href).href}?id=${encodeURIComponent(id)}`;
+}
+
 async function copyText(text) {
   if (navigator.clipboard?.writeText) {
     await navigator.clipboard.writeText(text);
@@ -60,7 +66,7 @@ function showShareResult(url, data) {
   existing?.remove();
 
   const previewUrl = makeSafePreviewUrl(url);
-  const codeUrl = url.includes('?') ? url + '&view=code' : url + '?view=code';
+  const codeUrl = makeSharedCodeUrl(url);
 
   const box = document.createElement('div');
   box.id = 'shareResult';
