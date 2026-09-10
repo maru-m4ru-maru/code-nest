@@ -1,0 +1,4 @@
+.code-input,.markdown-input,.terminal-input{resize:vertical;min-height:180px;max-height:70vh}
+.cell .copy-code-btn{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-width:58px}
+.cell .copy-code-btn svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.cell .copy-code-btn.is-copied{color:#0b8f56}
