@@ -5,6 +5,7 @@ function snapshotForShare() {
   const title = document.querySelector('#titleInput')?.value || 'Untitled Notebook';
   const cells = [...document.querySelectorAll('.cell')].map((el) => ({
     type: el.dataset.type || 'code',
+    name: el.querySelector('.cell-name')?.value || '',
     source: el.querySelector('textarea')?.value || '',
     output: el.querySelector('.output')?.textContent || el.querySelector('.terminal-output')?.textContent || ''
   }));
@@ -46,7 +47,15 @@ async function copyText(text) {
   area.remove();
 }
 
-function showShareResult(url) {
+async function copyShareCode(data) {
+  const parts = (data?.cells || []).map((cell, index) => {
+    const name = cell.name || `cell-${index + 1}`;
+    return `# ${name}\n${cell.source || ''}`;
+  });
+  await copyText(parts.join('\n\n'));
+}
+
+function showShareResult(url, data) {
   const existing = document.querySelector('#shareResult');
   existing?.remove();
 
@@ -76,6 +85,8 @@ function showShareResult(url) {
       </div>
 
       <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;flex-wrap:wrap">
+        <button id="shareCodeCopy" style="padding:11px 15px;border-radius:11px;border:1px solid rgba(120,120,140,.3);background:transparent;color:inherit;cursor:pointer">コードをコピー</button>
+        <button id="shareCodeUrlCopy" style="padding:11px 15px;border-radius:11px;border:1px solid rgba(120,120,140,.3);background:transparent;color:inherit;cursor:pointer">CODE URLをコピー</button>
         <button id="shareCodeOpen" style="padding:11px 15px;border-radius:11px;border:1px solid rgba(120,120,140,.3);background:transparent;color:inherit;cursor:pointer">コードを開く</button>
         <button id="sharePreviewOpen" style="padding:11px 15px;border-radius:11px;border:1px solid rgba(120,120,140,.3);background:transparent;color:inherit;cursor:pointer">プレビューを開く</button>
         <button id="shareCopyAll" style="padding:11px 15px;border-radius:11px;border:0;background:#7c3aed;color:#fff;font-weight:700;cursor:pointer">URLをコピー</button>
@@ -84,6 +95,22 @@ function showShareResult(url) {
 
   document.body.appendChild(box);
   box.querySelector('#shareResultClose').onclick = () => box.remove();
+  box.querySelector('#shareCodeCopy').onclick = async () => {
+    try {
+      await copyShareCode(data);
+      box.querySelector('#shareCodeCopy').textContent = 'コピーしました ✓';
+    } catch {
+      box.querySelector('#shareCodeCopy').textContent = 'コピー失敗';
+    }
+  };
+  box.querySelector('#shareCodeUrlCopy').onclick = async () => {
+    try {
+      await copyText(codeUrl);
+      box.querySelector('#shareCodeUrlCopy').textContent = 'コピーしました ✓';
+    } catch {
+      box.querySelector('#shareCodeUrlCopy').textContent = 'コピー失敗';
+    }
+  };
   box.querySelector('#shareCodeOpen').onclick = () => window.open(codeUrl, '_blank', 'noopener,noreferrer');
   box.querySelector('#sharePreviewOpen').onclick = () => window.open(previewUrl, '_blank', 'noopener,noreferrer');
   box.querySelector('#shareCopyAll').onclick = async () => {
@@ -110,7 +137,7 @@ async function runShare() {
     const data = snapshotForShare();
     if (!data.cells.length) throw new Error('共有するセルがありません');
     const url = await shareNotebook(data);
-    showShareResult(url);
+    showShareResult(url, data);
     button.textContent = '✓ 共有済み';
   } catch (error) {
     console.error(error);
