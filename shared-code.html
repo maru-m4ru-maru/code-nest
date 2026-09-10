@@ -1,0 +1,129 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Code Nest — Shared Code</title>
+<style>
+:root{font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#172033;background:#f2f4fb}
+*{box-sizing:border-box}
+body{margin:0;padding:32px 18px 60px}
+.page{width:min(960px,100%);margin:auto}
+.header,.cell{background:#fff;border:1px solid #e3e7f0;border-radius:20px;box-shadow:0 10px 34px rgba(31,41,55,.06)}
+.header{padding:24px 26px;margin-bottom:18px}
+.brand{font-weight:800;color:#7c3aed;font-size:14px}.meta{color:#697386;font-size:13px;margin-top:8px}
+h1{margin:12px 0 0;font-size:clamp(26px,5vw,40px);letter-spacing:-.03em}
+.actions{display:flex;gap:9px;flex-wrap:wrap;margin-top:18px}.btn{border:1px solid #dfe4ee;background:#fff;color:#334155;border-radius:11px;padding:10px 14px;font:inherit;font-weight:700;cursor:pointer}.btn.primary{background:#7c3aed;color:#fff;border-color:#7c3aed}
+.cell{overflow:hidden;margin:14px 0}.cell-head{display:flex;justify-content:space-between;align-items:center;padding:11px 15px;border-bottom:1px solid #edf0f5}.badge{font-weight:700;color:#7c3aed}.number{color:#7c8798;font-size:12px}
+.code-wrap{position:relative}.copy-cell{position:absolute;right:12px;top:12px}.source{margin:0;padding:20px 18px 18px;background:#10131a;color:#f3f4f6;font:14px/1.65 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word;padding-right:90px;min-height:46px}
+.output{border-top:1px solid #edf0f5}.output-label{padding:9px 16px;color:#6b7280;font-size:12px;font-weight:700}.output pre{margin:0;padding:0 16px 16px;color:#303846;font:13px/1.6 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre-wrap;word-break:break-word}
+.error{padding:14px;border:1px solid #e1b8bd;border-radius:12px;background:#fff0f2;color:#9a2433;font-size:13px;white-space:pre-wrap}.loading{padding:24px;text-align:center;color:#697386}
+</style>
+</head>
+<body>
+<div class="page">
+<section class="header">
+<div class="brand">&lt;/&gt; Code Nest · Shared Code</div>
+<h1 id="title">共有コード</h1>
+<div class="meta" id="meta">読み込み中…</div>
+<div class="actions">
+<button class="btn primary" id="copyAll">すべてコピー</button>
+<a class="btn" id="previewLink" href="#">プレビューを開く</a>
+</div>
+</section>
+<main id="content"><div class="loading">共有コードを読み込んでいます…</div></main>
+</div>
+<script>
+(() => {
+  const workerOrigin = 'https://code-nest-worker.maru-0727.workers.dev';
+  const params = new URLSearchParams(location.search);
+  const id = String(params.get('id') || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80);
+  const dataUrl = id ? `${workerOrigin}/share/${encodeURIComponent(id)}?view=data` : '';
+  const previewLink = document.getElementById('previewLink');
+  const title = document.getElementById('title');
+  const meta = document.getElementById('meta');
+  const content = document.getElementById('content');
+  const copyAll = document.getElementById('copyAll');
+
+  function escapeHtml(value) {
+    return String(value).replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+  }
+
+  async function copyText(text) {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return;
+    }
+    const area = document.createElement('textarea');
+    area.value = text;
+    area.style.position = 'fixed';
+    area.style.opacity = '0';
+    document.body.appendChild(area);
+    area.select();
+    document.execCommand('copy');
+    area.remove();
+  }
+
+  function normaliseCells(data) {
+    return Array.isArray(data?.cells) ? data.cells.map(cell => ({
+      type: String(cell?.type || 'code'),
+      source: String(cell?.source || ''),
+      output: String(cell?.output || '')
+    })) : [];
+  }
+
+  function buildCell(cell, index) {
+    const type = cell.type === 'markdown' ? 'Markdown' : cell.type === 'terminal' ? 'Terminal' : 'Code';
+    const section = document.createElement('section');
+    section.className = 'cell';
+    section.innerHTML = `
+      <div class="cell-head"><span class="badge">${escapeHtml(type)}</span><span class="number">#${index + 1}</span></div>
+      <div class="code-wrap"><button class="btn copy-cell" type="button">コピー</button><pre class="source">${escapeHtml(cell.source)}</pre></div>
+      ${cell.output ? `<div class="output"><div class="output-label">Output</div><pre>${escapeHtml(cell.output)}</pre></div>` : ''}
+    `;
+    section.querySelector('.copy-cell').addEventListener('click', async event => {
+      const button = event.currentTarget;
+      try {
+        await copyText(cell.source);
+        button.textContent = 'コピーしました ✓';
+      } catch {
+        button.textContent = 'コピー失敗';
+      }
+      setTimeout(() => { button.textContent = 'コピー'; }, 1400);
+    });
+    return section;
+  }
+
+  (async () => {
+    try {
+      if (!dataUrl) throw new Error('共有IDがありません。');
+      previewLink.href = `./shared-preview.html?id=${encodeURIComponent(id)}`;
+      const response = await fetch(dataUrl, { headers: { Accept: 'application/json' }, cache: 'no-store' });
+      if (!response.ok) throw new Error(`共有データの取得に失敗しました (${response.status})`);
+      const data = await response.json();
+      const cells = normaliseCells(data);
+      title.textContent = String(data.title || 'Untitled Notebook');
+      meta.textContent = `${cells.length} cells · read-only shared code`;
+      content.textContent = '';
+      cells.forEach((cell, index) => content.appendChild(buildCell(cell, index)));
+      if (!cells.length) content.innerHTML = '<div class="loading">共有されたセルがありません。</div>';
+      copyAll.addEventListener('click', async () => {
+        const text = cells.map((cell, index) => `# cell-${index + 1}\n${cell.source || ''}`).join('\n\n');
+        try {
+          await copyText(text);
+          copyAll.textContent = 'コピーしました ✓';
+        } catch {
+          copyAll.textContent = 'コピー失敗';
+        }
+        setTimeout(() => { copyAll.textContent = 'すべてコピー'; }, 1400);
+      });
+    } catch (error) {
+      content.innerHTML = `<div class="error">${escapeHtml(error?.message || error)}</div>`;
+      copyAll.disabled = true;
+      previewLink.classList.add('disabled');
+    }
+  })();
+})();
+</script>
+</body>
+</html>
