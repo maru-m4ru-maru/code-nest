@@ -6,66 +6,152 @@
 <meta name="theme-color" content="#07131d">
 <title>Code Nest — Shared Preview</title>
 <style>
-:root{--bg:#07131d;--panel:#0d1e2a;--line:#24404e;--text:#f3f8fb;--muted:#9cb0bb;--blue:#16b9ff}
-*{box-sizing:border-box}
-body{margin:0;min-height:100vh;background:radial-gradient(circle at 12% 0%,#103044 0,transparent 30%),radial-gradient(circle at 88% 8%,#201642 0,transparent 28%),linear-gradient(180deg,var(--bg),#061018);color:var(--text);font-family:Inter,"Noto Sans JP",system-ui,sans-serif}
-.shell{width:min(1100px,calc(100% - 28px));margin:auto;padding:28px 0}
-.card{max-width:760px;margin:9vh auto 0;background:linear-gradient(145deg,#102431,#0b1b25);border:1px solid var(--line);border-radius:22px;padding:28px;box-shadow:0 30px 90px #0009}
-.brand{font-weight:800;font-size:13px;color:#9edfff}.brand small{display:block;color:var(--muted);font-size:11px;font-weight:500;margin-top:3px}
-h1{margin:22px 0 8px;font-size:28px;letter-spacing:-.03em}.lead{margin:0;color:var(--muted);font-size:13px;line-height:1.8}
-.warning{margin:18px 0;padding:16px;border:1px solid #8f6f3d;border-radius:14px;background:#2a2116;color:#f6dfa9;font-size:13px;line-height:1.8;white-space:pre-wrap}
-.urlbox{padding:12px;border:1px solid var(--line);border-radius:12px;background:#ffffff05;color:#aebdc5;font:11px/1.6 ui-monospace,monospace;word-break:break-all}
-.controls{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:16px}
-button{font:inherit}.btn{border:1px solid var(--line);background:#ffffff08;color:var(--text);border-radius:11px;padding:10px 14px;cursor:pointer;font-weight:700}.btn.primary{background:linear-gradient(135deg,var(--blue),#078bd7);border-color:transparent;color:#03131d}.btn:disabled{opacity:.5;cursor:not-allowed}
-iframe{display:none;width:100%;height:82vh;border:1px solid var(--line);border-radius:18px;background:#fff;box-shadow:0 25px 80px #0008}
-iframe.visible{display:block}.hidden{display:none!important}
-.back{margin-top:12px;text-align:center;color:#6f8793;font-size:10px}
-.error{margin-top:16px;padding:12px;border:1px solid #713f46;border-radius:12px;background:#321b20;color:#ffb7b7;font-size:12px;line-height:1.6;white-space:pre-wrap}
-@media(max-width:620px){.card{margin-top:4vh;padding:20px}.controls .btn{flex:1}}
+:root{
+  --bg:#07131d;
+  --line:#24404e;
+}
+
+*{
+  box-sizing:border-box;
+}
+
+html,
+body{
+  margin:0;
+  width:100%;
+  min-height:100%;
+  background:var(--bg);
+}
+
+body{
+  min-height:100vh;
+  font-family:Inter,"Noto Sans JP",system-ui,sans-serif;
+}
+
+iframe{
+  display:block;
+  width:100%;
+  min-height:100vh;
+  height:100vh;
+  border:0;
+  margin:0;
+  background:#fff;
+}
+
+.loading{
+  position:fixed;
+  inset:0;
+  display:grid;
+  place-items:center;
+  background:
+    radial-gradient(circle at 12% 0%,#103044 0,transparent 30%),
+    radial-gradient(circle at 88% 8%,#201642 0,transparent 28%),
+    linear-gradient(180deg,var(--bg),#061018);
+  color:#f3f8fb;
+  font-family:Inter,"Noto Sans JP",system-ui,sans-serif;
+  z-index:10;
+}
+
+.loading.hidden{
+  display:none;
+}
+
+.loading-box{
+  text-align:center;
+}
+
+.loading-brand{
+  font-weight:800;
+  font-size:14px;
+  color:#9edfff;
+}
+
+.loading-text{
+  margin-top:10px;
+  color:#9cb0bb;
+  font-size:12px;
+}
+
+.error{
+  position:fixed;
+  inset:0;
+  display:grid;
+  place-items:center;
+  padding:24px;
+  background:
+    radial-gradient(circle at 12% 0%,#103044 0,transparent 30%),
+    radial-gradient(circle at 88% 8%,#201642 0,transparent 28%),
+    linear-gradient(180deg,var(--bg),#061018);
+  color:#fff;
+  z-index:20;
+}
+
+.error.hidden{
+  display:none;
+}
+
+.error-box{
+  width:min(620px,100%);
+  padding:24px;
+  border:1px solid #713f46;
+  border-radius:18px;
+  background:#321b20;
+  color:#ffb7b7;
+  font:13px/1.7 ui-monospace,monospace;
+  white-space:pre-wrap;
+  word-break:break-word;
+}
 </style>
 </head>
 <body>
-<div class="shell">
-  <section class="card" id="confirmCard">
-    <div class="brand">&lt;/&gt; Code Nest<small>Shared Preview</small></div>
-    <h1>このプレビューを実行しますか？</h1>
-    <p class="lead">共有されたコードがブラウザで実行されます。意味の分からないコードは実行しないでください。</p>
-    <div class="warning" id="warningText"></div>
-    <div class="urlbox" id="codeUrl"></div>
-    <div class="controls">
-      <button class="btn primary" id="runButton" type="button">▶ 実行</button>
-    </div>
-    <div class="back">実行しない場合は、このページを閉じてください。</div>
-    <div class="error hidden" id="errorBox"></div>
-  </section>
 
-  <iframe id="previewFrame" title="Code Nest Shared Preview" referrerpolicy="no-referrer"></iframe>
+<div class="loading" id="loading">
+  <div class="loading-box">
+    <div class="loading-brand">&lt;/&gt; Code Nest</div>
+    <div class="loading-text">読み込み中…</div>
+  </div>
 </div>
+
+<div class="error hidden" id="error">
+  <div class="error-box" id="errorText"></div>
+</div>
+
+<iframe
+  id="previewFrame"
+  title="Code Nest Shared Preview"
+  referrerpolicy="no-referrer"
+></iframe>
 
 <script>
 (() => {
   'use strict';
 
   const params = new URLSearchParams(location.search);
-  const id = String(params.get('id') || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80);
-  const workerOrigin = 'https://code-nest-worker.maru-0727.workers.dev';
-  const dataUrl = id ? `${workerOrigin}/share/${encodeURIComponent(id)}?view=data` : '';
-  const codeUrl = id ? `${workerOrigin}/share/${encodeURIComponent(id)}?view=code` : '';
+  const id = String(
+    params.get('id') || ''
+  ).replace(
+    /[^a-zA-Z0-9_-]/g,
+    ''
+  ).slice(0, 80);
 
-  const WARNING =
-    '意味の分からないコードは「絶対に」SandboxOFFで実行しないでください。\n\n' +
-    '悪意あるコードだった場合、パスワードなどが流出などの悪影響が生じる可能性が高いです。\n\n' +
-    'CodeNest開発者は、そのような行為で生じるいかなる問題の責任を一切負いません。';
+  const workerOrigin =
+    'https://code-nest-worker.maru-0727.workers.dev';
 
-  const card = document.getElementById('confirmCard');
-  const warning = document.getElementById('warningText');
-  const codeUrlEl = document.getElementById('codeUrl');
-  const run = document.getElementById('runButton');
-  const frame = document.getElementById('previewFrame');
-  const errorBox = document.getElementById('errorBox');
+  const dataUrl = id
+    ? `${workerOrigin}/share/${encodeURIComponent(id)}?view=data`
+    : '';
 
-  warning.textContent = WARNING;
-  codeUrlEl.textContent = codeUrl || '無効な共有プレビューです。';
+  const loading =
+    document.getElementById('loading');
+
+  const error =
+    document.getElementById('error');
+
+  const errorText =
+    document.getElementById('errorText');
+
+  const frame =
+    document.getElementById('previewFrame');
 
   function escapeAttr(value) {
     return String(value)
@@ -77,26 +163,41 @@ iframe.visible{display:block}.hidden{display:none!important}
   }
 
   function normaliseCells(data) {
-    if (!data || !Array.isArray(data.cells)) return [];
+    if (
+      !data ||
+      !Array.isArray(data.cells)
+    ) {
+      return [];
+    }
 
     return data.cells.map(cell => ({
-      type: String(cell?.type || 'code'),
-      source: String(cell?.source || ''),
-      output: String(cell?.output || '')
+      type: String(
+        cell?.type || 'code'
+      ),
+      source: String(
+        cell?.source || ''
+      ),
+      output: String(
+        cell?.output || ''
+      )
     }));
   }
 
   function buildPreviewHtml(data) {
-    const cells = normaliseCells(data);
+    const cells =
+      normaliseCells(data);
 
-    const htmlCell = cells.find(cell => {
-      const source = cell.source;
-      return (
-        /<html\b/i.test(source) ||
-        /<!doctype\s+html/i.test(source) ||
-        /<body\b/i.test(source)
-      );
-    });
+    const htmlCell =
+      cells.find(cell => {
+        const source =
+          cell.source;
+
+        return (
+          /<html\b/i.test(source) ||
+          /<!doctype\s+html/i.test(source) ||
+          /<body\b/i.test(source)
+        );
+      });
 
     if (!htmlCell) {
       return `<!doctype html>
@@ -106,9 +207,26 @@ iframe.visible{display:block}.hidden{display:none!important}
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Code Nest Preview</title>
 <style>
-body{margin:0;font-family:system-ui,sans-serif;background:#f2f4fb;color:#172033}
-.empty{min-height:100vh;display:grid;place-items:center;padding:24px}
-.card{background:#fff;border:1px solid #e3e7f0;border-radius:18px;padding:28px;max-width:520px;box-shadow:0 12px 40px rgba(31,41,55,.08)}
+body{
+  margin:0;
+  font-family:system-ui,sans-serif;
+  background:#f2f4fb;
+  color:#172033;
+}
+.empty{
+  min-height:100vh;
+  display:grid;
+  place-items:center;
+  padding:24px;
+}
+.card{
+  background:#fff;
+  border:1px solid #e3e7f0;
+  border-radius:18px;
+  padding:28px;
+  max-width:520px;
+  box-shadow:0 12px 40px rgba(31,41,55,.08);
+}
 </style>
 </head>
 <body>
@@ -122,41 +240,82 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f2f4fb;color:#172033}
 </html>`;
     }
 
-    let source = htmlCell.source;
+    let source =
+      htmlCell.source;
 
-    if (!/<!doctype\s+html/i.test(source) && !/<html\b/i.test(source)) {
+    if (
+      !/<!doctype\s+html/i.test(source) &&
+      !/<html\b/i.test(source)
+    ) {
       source =
-        `<!doctype html><html lang="ja"><head>` +
+        `<!doctype html>` +
+        `<html lang="ja">` +
+        `<head>` +
         `<meta charset="utf-8">` +
         `<meta name="viewport" content="width=device-width,initial-scale=1">` +
-        `<title>${escapeAttr(data.title || 'Code Nest Preview')}</title>` +
-        `</head><body>${source}</body></html>`;
+        `<title>${escapeAttr(
+          data.title ||
+          'Code Nest Preview'
+        )}</title>` +
+        `</head>` +
+        `<body>` +
+        source +
+        `</body>` +
+        `</html>`;
     }
 
-    const css = cells
-      .filter(cell => cell.type === 'css')
-      .map(cell => `<style>${cell.source}</style>`)
-      .join('');
+    const css =
+      cells
+        .filter(
+          cell =>
+            cell.type === 'css'
+        )
+        .map(
+          cell =>
+            `<style>${cell.source}</style>`
+        )
+        .join('');
 
-    const js = cells
-      .filter(cell => cell.type === 'javascript' || cell.type === 'js')
-      .map(cell => `<script>${cell.source}<\/script>`)
-      .join('');
+    const js =
+      cells
+        .filter(
+          cell =>
+            cell.type === 'javascript' ||
+            cell.type === 'js'
+        )
+        .map(
+          cell =>
+            `<script>${cell.source}<\/script>`
+        )
+        .join('');
 
     if (css) {
-      if (/<\/head>/i.test(source)) {
-        source = source.replace(/<\/head>/i, css + '</head>');
+      if (
+        /<\/head>/i.test(source)
+      ) {
+        source =
+          source.replace(
+            /<\/head>/i,
+            css + '</head>'
+          );
       } else {
-        source = source.replace(
-          /<body\b([^>]*)>/i,
-          `<head>${css}</head><body$1>`
-        );
+        source =
+          source.replace(
+            /<body\b([^>]*)>/i,
+            `<head>${css}</head><body$1>`
+          );
       }
     }
 
     if (js) {
-      if (/<\/body>/i.test(source)) {
-        source = source.replace(/<\/body>/i, js + '</body>');
+      if (
+        /<\/body>/i.test(source)
+      ) {
+        source =
+          source.replace(
+            /<\/body>/i,
+            js + '</body>'
+          );
       } else {
         source += js;
       }
@@ -166,25 +325,33 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f2f4fb;color:#172033}
   }
 
   function showError(message) {
-    errorBox.textContent = message;
-    errorBox.classList.remove('hidden');
+    loading.classList.add('hidden');
+    errorText.textContent =
+      String(message);
+    error.classList.remove('hidden');
   }
 
-  run.addEventListener('click', async () => {
-    if (!dataUrl) return;
-
-    run.disabled = true;
-    run.textContent = '読み込み中…';
-    errorBox.classList.add('hidden');
+  async function loadPreview() {
+    if (!dataUrl) {
+      showError(
+        '共有IDがありません。正しい共有プレビューURLを開いてください。'
+      );
+      return;
+    }
 
     try {
-      const response = await fetch(dataUrl, {
-        method: 'GET',
-        headers: {
-          'Accept': 'application/json'
-        },
-        cache: 'no-store'
-      });
+      const response =
+        await fetch(
+          dataUrl,
+          {
+            method:'GET',
+            headers:{
+              'Accept':
+                'application/json'
+            },
+            cache:'no-store'
+          }
+        );
 
       if (!response.ok) {
         throw new Error(
@@ -192,27 +359,48 @@ body{margin:0;font-family:system-ui,sans-serif;background:#f2f4fb;color:#172033}
         );
       }
 
-      const data = await response.json();
-      const previewHtml = buildPreviewHtml(data);
+      const data =
+        await response.json();
 
-      frame.removeAttribute('sandbox');
-      frame.srcdoc = previewHtml;
-      frame.classList.add('visible');
-      card.classList.add('hidden');
-    } catch (error) {
-      showError(String(error?.message || error));
-      run.disabled = false;
-      run.textContent = '▶ 実行';
+      const previewHtml =
+        buildPreviewHtml(data);
+
+      frame.removeAttribute(
+        'sandbox'
+      );
+
+      frame.srcdoc =
+        previewHtml;
+
+      frame.addEventListener(
+        'load',
+        () => {
+          loading.classList.add(
+            'hidden'
+          );
+        },
+        {
+          once:true
+        }
+      );
+
+      setTimeout(() => {
+        loading.classList.add(
+          'hidden'
+        );
+      }, 1500);
+
+    } catch (err) {
+      showError(
+        err?.message ||
+        String(err)
+      );
     }
-  });
-
-  if (!dataUrl) {
-    run.disabled = true;
-    showError(
-      '共有IDがありません。正しい共有プレビューURLを開いてください。'
-    );
   }
+
+  loadPreview();
 })();
 </script>
+
 </body>
 </html>
