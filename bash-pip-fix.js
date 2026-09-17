@@ -2,8 +2,8 @@
   'use strict';
 
   const PREFIX = '[Code Nest Bash Python]';
-  const PYODIDE_SRC = 'https://cdn.jsdelivr.net/pyodide/v0.314.0.7/full/pyodide.js';
-  const PYODIDE_INDEX = 'https://cdn.jsdelivr.net/pyodide/v0.314.0.7/full/';
+  const PYODIDE_SRC = 'https://cdn.jsdelivr.net/pyodide/v314.0.7/full/pyodide.mjs';
+  const PYODIDE_INDEX = 'https://cdn.jsdelivr.net/pyodide/v314.0.7/full/';
   let pyodidePromise = null;
   let initDone = false;
 
@@ -72,10 +72,7 @@
       current += ch;
     }
 
-    if (current) {
-      tokens.push(current);
-    }
-
+    if (current) tokens.push(current);
     return tokens;
   }
 
@@ -91,46 +88,32 @@
       return globalThis.__codeNestBashPyodide;
     }
 
-    if (pyodidePromise) {
-      return pyodidePromise;
-    }
+    if (pyodidePromise) return pyodidePromise;
 
     pyodidePromise = (async () => {
-      if (typeof globalThis.loadPyodide !== 'function') {
-        await new Promise((resolve, reject) => {
-          const existing = document.querySelector(
-            'script[data-code-nest-bash-pyodide]'
-          );
+      try {
+        const module = await import(PYODIDE_SRC);
 
-          if (existing) {
-            existing.addEventListener('load', resolve, { once: true });
-            existing.addEventListener(
-              'error',
-              () => reject(new Error('Pyodideの読み込みに失敗しました。')),
-              { once: true }
-            );
-            return;
-          }
+        if (typeof module.loadPyodide !== 'function') {
+          throw new Error('loadPyodide() が見つかりません。');
+        }
 
-          const script = document.createElement('script');
-          script.src = PYODIDE_SRC;
-          script.async = true;
-          script.dataset.codeNestBashPyodide = '1';
-          script.onload = resolve;
-          script.onerror = () =>
-            reject(new Error('Pyodideの読み込みに失敗しました。'));
-          document.head.appendChild(script);
+        const pyodide = await module.loadPyodide({
+          indexURL: PYODIDE_INDEX
         });
+
+        globalThis.__codeNestBashPyodide = pyodide;
+
+        await pyodide.loadPackage('micropip');
+
+        return pyodide;
+      } catch (error) {
+        console.error(PREFIX, 'Pyodide load failed:', error);
+
+        throw new Error(
+          `Pyodideの読み込みに失敗しました: ${error?.message || error}`
+        );
       }
-
-      const runtime = await globalThis.loadPyodide({
-        indexURL: PYODIDE_INDEX
-      });
-
-      globalThis.__codeNestBashPyodide = runtime;
-      await runtime.loadPackage('micropip');
-
-      return runtime;
     })();
 
     try {
@@ -160,12 +143,11 @@
       return result;
     }
 
-    const code =
-      Number.isFinite(result?.code)
-        ? result.code
-        : Number.isFinite(result?.exitCode)
-          ? result.exitCode
-          : 0;
+    const code = Number.isFinite(result?.code)
+      ? result.code
+      : Number.isFinite(result?.exitCode)
+        ? result.exitCode
+        : 0;
 
     const stderr = String(result?.stderr || '');
 
@@ -180,7 +162,7 @@
 
   function missingModuleName(errorText) {
     const match = String(errorText).match(
-      /ModuleNotFoundError:\s+No module named ['"]([^'"]+)['"]/
+      /ModuleNotFoundError:\s+No module named ['"]([^'"]+)['"]/i
     );
 
     if (!match) return '';
@@ -199,18 +181,22 @@
   }
 
   async function installPythonPackage(spec) {
-    const pyodide = await ensurePyodide();
     const packageSpec = String(spec || '').trim();
 
     if (!packageSpec) {
       throw new Error('pip: missing package specification');
     }
 
-    const escaped = JSON.stringify(packageSpec);
+    const pyodide = await ensurePyodide();
+
+    pyodide.globals.set(
+      '__code_nest_package_spec',
+      packageSpec
+    );
 
     await pyodide.runPythonAsync(`
 import micropip
-await micropip.install(${escaped})
+await micropip.install(__code_nest_package_spec)
 `);
 
     return packageSpec;
@@ -218,14 +204,21 @@ await micropip.install(${escaped})
 
   async function runPythonSource(source, filename, args = []) {
     const pyodide = await ensurePyodide();
-    const scriptName = String(filename || '<string>');
+
+    const scriptName = String(
+      filename || '<string>'
+    );
+
     const cwd =
       globalThis.__codeNestPythonCwd ||
       '/home/coder';
 
     pyodide.globals.set(
       '__code_nest_argv_json',
-      JSON.stringify([scriptName, ...args])
+      JSON.stringify([
+        scriptName,
+        ...args
+      ])
     );
 
     pyodide.globals.set(
@@ -257,11 +250,13 @@ _cn_old_stdout = sys.stdout
 _cn_old_stderr = sys.stderr
 _cn_stdout = io.StringIO()
 _cn_stderr = io.StringIO()
+
 sys.stdout = _cn_stdout
 sys.stderr = _cn_stderr
 
 try:
     sys.argv = json.loads(__code_nest_argv_json)
+
     exec(
         compile(
             __code_nest_source,
@@ -279,31 +274,26 @@ __code_nest_stdout = _cn_stdout.getvalue()
 __code_nest_stderr = _cn_stderr.getvalue()
 `);
 
-      const stdout = pyodide.globals
-        .get('__code_nest_stdout')
-        .toJs();
-
-      const stderr = pyodide.globals
-        .get('__code_nest_stderr')
-        .toJs();
-
       return {
-        stdout: String(stdout || ''),
-        stderr: String(stderr || ''),
+        stdout: String(
+          pyodide.globals.get(
+            '__code_nest_stdout'
+          ) || ''
+        ),
+        stderr: String(
+          pyodide.globals.get(
+            '__code_nest_stderr'
+          ) || ''
+        ),
         code: 0
       };
     } catch (error) {
-      let message =
-        error?.message ||
-        String(error);
-
       return {
         stdout: '',
-        stderr:
-          String(message).replace(
-            /\n?$/,
-            '\n'
-          ),
+        stderr: String(
+          error?.message ||
+          error
+        ).replace(/\n?$/, '\n'),
         code: 1
       };
     }
@@ -314,18 +304,21 @@ __code_nest_stderr = _cn_stderr.getvalue()
     filename,
     args = []
   ) {
-    let result = await runPythonSource(
-      source,
-      filename,
-      args
-    );
+    let result =
+      await runPythonSource(
+        source,
+        filename,
+        args
+      );
 
     if (result.code === 0) {
       return result;
     }
 
     const packageName =
-      missingModuleName(result.stderr);
+      missingModuleName(
+        result.stderr
+      );
 
     if (!packageName) {
       return result;
@@ -346,17 +339,21 @@ __code_nest_stderr = _cn_stderr.getvalue()
         'bash-system'
       );
 
-      result = await runPythonSource(
-        source,
-        filename,
-        args
-      );
+      result =
+        await runPythonSource(
+          source,
+          filename,
+          args
+        );
     } catch (error) {
       result.stderr +=
         String(
           error?.message ||
           error
-        ).replace(/\n?$/, '\n');
+        ).replace(
+          /\n?$/,
+          '\n'
+        );
     }
 
     return result;
@@ -366,11 +363,14 @@ __code_nest_stderr = _cn_stderr.getvalue()
     command,
     input
   ) {
-    const args = splitArgs(command);
+    const args =
+      splitArgs(command);
 
     if (
       !args.length ||
-      !/^(?:python|python3|py)$/i.test(args[0])
+      !/^(?:python|python3|py)$/i.test(
+        args[0]
+      )
     ) {
       return false;
     }
@@ -389,24 +389,31 @@ __code_nest_stderr = _cn_stderr.getvalue()
         args[1] === '--version' ||
         args[1] === '-V'
       ) {
-        const pyodide = await ensurePyodide();
-        const version = pyodide.runPython(
-          'import sys; sys.version.split()[0]'
-        );
+        const pyodide =
+          await ensurePyodide();
+
+        const version =
+          pyodide.runPython(
+            'import sys; sys.version.split()[0]'
+          );
+
         print(
           `Python ${version} (Pyodide)`
         );
+
         return true;
       }
 
       if (!args[1]) {
-        const pyodide = await ensurePyodide();
-        const version = pyodide.runPython(
-          'import sys; sys.version'
-        );
+        const pyodide =
+          await ensurePyodide();
 
         print(
-          String(version)
+          String(
+            pyodide.runPython(
+              'import sys; sys.version'
+            )
+          )
         );
 
         return true;
@@ -424,6 +431,7 @@ __code_nest_stderr = _cn_stderr.getvalue()
             'python: option -c requires an argument',
             'bash-error'
           );
+
           return true;
         }
 
@@ -435,7 +443,9 @@ __code_nest_stderr = _cn_stderr.getvalue()
           );
 
         if (result.stdout) {
-          print(result.stdout);
+          print(
+            result.stdout
+          );
         }
 
         if (result.stderr) {
@@ -457,15 +467,20 @@ __code_nest_stderr = _cn_stderr.getvalue()
             'python: option -m requires an argument',
             'bash-error'
           );
+
           return true;
         }
 
-        if (module === 'pip') {
-          const pipCommand =
-            ['pip', ...args.slice(3)].join(' ');
-
+        if (
+          module.toLowerCase() ===
+          'pip'
+        ) {
           await runPip(
-            pipCommand,
+            [
+              'pip',
+              'install',
+              ...args.slice(3)
+            ].join(' '),
             input
           );
 
@@ -478,7 +493,12 @@ __code_nest_stderr = _cn_stderr.getvalue()
         const code = `
 import runpy
 import sys
-sys.argv = ${JSON.stringify([module, ...moduleArgs])}
+
+sys.argv = ${JSON.stringify([
+          module,
+          ...moduleArgs
+        ])}
+
 runpy.run_module(
     ${JSON.stringify(module)},
     run_name="__main__"
@@ -493,7 +513,9 @@ runpy.run_module(
           );
 
         if (result.stdout) {
-          print(result.stdout);
+          print(
+            result.stdout
+          );
         }
 
         if (result.stderr) {
@@ -506,9 +528,16 @@ runpy.run_module(
         return true;
       }
 
-      const script = args[1];
-      const scriptArgs = args.slice(2);
-      const source = await readShellFile(script);
+      const script =
+        args[1];
+
+      const scriptArgs =
+        args.slice(2);
+
+      const source =
+        await readShellFile(
+          script
+        );
 
       globalThis.__codeNestPythonCwd =
         '/home/coder';
@@ -521,7 +550,9 @@ runpy.run_module(
         );
 
       if (result.stdout) {
-        print(result.stdout);
+        print(
+          result.stdout
+        );
       }
 
       if (result.stderr) {
@@ -605,7 +636,9 @@ runpy.run_module(
         'bashInput'
       );
 
-    if (!input) return;
+    if (!input) {
+      return;
+    }
 
     const command =
       String(
@@ -613,24 +646,26 @@ runpy.run_module(
       ).trim();
 
     if (
-      isPipInstall(command) ||
-      isPythonCommand(command)
+      !isPipInstall(command) &&
+      !isPythonCommand(command)
     ) {
-      event.preventDefault();
-      event.stopPropagation();
-      event.stopImmediatePropagation();
+      return;
+    }
 
-      if (isPipInstall(command)) {
-        await runPip(
-          command,
-          input
-        );
-      } else {
-        await runPython(
-          command,
-          input
-        );
-      }
+    event.preventDefault();
+    event.stopPropagation();
+    event.stopImmediatePropagation();
+
+    if (isPipInstall(command)) {
+      await runPip(
+        command,
+        input
+      );
+    } else {
+      await runPython(
+        command,
+        input
+      );
     }
   }
 
@@ -647,7 +682,9 @@ runpy.run_module(
         '#bashInput'
       );
 
-    if (!input) return;
+    if (!input) {
+      return;
+    }
 
     const command =
       String(
@@ -712,7 +749,7 @@ runpy.run_module(
     );
 
     log(
-      'READY V0.5.0 PYTHON'
+      'READY V0.5.1 PYTHON'
     );
   }
 
