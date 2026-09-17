@@ -2,6 +2,11 @@
 (() => {
   'use strict';
 
+  // studio.html は project-idb.js を2回読み込む（loading.js の document.write と
+  // 末尾の <script> タグ）。2回実行すると bootstrapStudio が競合するので止める。
+  if (globalThis.__codeNestProjectIDBLoaded) return;
+  globalThis.__codeNestProjectIDBLoaded = true;
+
   const DB_NAME = 'CodeNestDB';
   const DB_VERSION = 3;
   const PROJECTS = 'projects';
@@ -61,7 +66,8 @@
   }
 
   function writeSession(key, value) {
-    try { sessionStorage.setItem(key, JSON.stringify(value)); } catch (_) {}
+    try { sessionStorage.setItem(key, JSON.stringify(value)); return true; }
+    catch (_) { return false; }
   }
 
   function removeSession(key) {
@@ -76,15 +82,40 @@
   function openDb() {
     if (dbPromise) return dbPromise;
     dbPromise = new Promise((resolve, reject) => {
+      let settled = false;
+      const finish = (fn, value) => { if (settled) return; settled = true; fn(value); };
+
+      // 他のタブが古いバージョンのDBを開いていると onsuccess / onerror が
+      // どちらも発火せず、Promiseが永久に未解決になり画面が固まる。
+      const timer = setTimeout(() => {
+        finish(reject, new Error('IndexedDB open timed out'));
+      }, 8000);
+
       const request = indexedDB.open(DB_NAME, DB_VERSION);
+      request.onblocked = () => {
+        clearTimeout(timer);
+        finish(reject, new Error('IndexedDB is blocked by another tab'));
+      };
       request.onupgradeneeded = () => {
         const db = request.result;
         if (!db.objectStoreNames.contains(PROJECTS)) db.createObjectStore(PROJECTS, { keyPath: 'id' });
         if (!db.objectStoreNames.contains(NOTEBOOKS)) db.createObjectStore(NOTEBOOKS, { keyPath: 'id' });
         if (!db.objectStoreNames.contains(FILESYSTEMS)) db.createObjectStore(FILESYSTEMS, { keyPath: 'id' });
       };
-      request.onsuccess = () => resolve(request.result);
-      request.onerror = () => reject(request.error || new Error('IndexedDB open failed'));
+      request.onsuccess = () => {
+        clearTimeout(timer);
+        const db = request.result;
+        // 別タブが新しいバージョンへ上げようとしたら、この接続を閉じて解放する
+        db.onversionchange = () => { try { db.close(); } catch (_) {} dbPromise = null; };
+        finish(resolve, db);
+      };
+      request.onerror = () => {
+        clearTimeout(timer);
+        finish(reject, request.error || new Error('IndexedDB open failed'));
+      };
+    }).catch((error) => {
+      dbPromise = null; // 次回は再試行できるようにする
+      throw error;
     });
     return dbPromise;
   }
@@ -236,7 +267,19 @@
   }
 
   function setCacheReady() {
-    try { sessionStorage.setItem(cacheKey('ready'), '1'); } catch (_) {}
+    try { sessionStorage.setItem(cacheKey('ready'), '1'); return true; }
+    catch (_) { return false; }
+  }
+
+  // リロードは「1セッションにつき1回だけ」に制限する。
+  function reloadCount() {
+    try { return Number(sessionStorage.getItem(cacheKey('reloads')) || 0) || 0; }
+    catch (_) { return Infinity; }
+  }
+
+  function bumpReloadCount() {
+    try { sessionStorage.setItem(cacheKey('reloads'), String(reloadCount() + 1)); }
+    catch (_) {}
   }
 
   function installStorageBridge() {
@@ -335,12 +378,27 @@
       writeSession(cacheKey('notebook'), notebookCache);
       writeSession(cacheKey('fs'), fsCache);
       setCacheReady();
-      location.reload();
-      return;
+
+      // sessionStorage が使えない環境（プライベートモード、容量超過、
+      // ストレージ遮断など）では書き込んだはずのキャッシュを読み戻せない。
+      // その状態で reload すると同じ分岐に入り続け、Studioが永久リロードで固まる。
+      // 書き戻しを実際に検証し、かつ1セッション1回までに制限する。
+      const verified = cacheReady() && !!readSession(cacheKey('notebook')) && !!readSession(cacheKey('fs'));
+
+      if (verified && reloadCount() < 1) {
+        bumpReloadCount();
+        location.reload();
+        return;
+      }
+
+      if (!verified) {
+        console.warn('[Code Nest IndexedDB] sessionStorage cache unavailable - reload skipped, running in memory');
+      }
+    } else {
+      notebookCache = cachedNotebook;
+      fsCache = cachedFs;
     }
 
-    notebookCache = cachedNotebook;
-    fsCache = cachedFs;
     installStorageBridge();
     updateStorageLabel();
 

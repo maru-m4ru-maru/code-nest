@@ -59,7 +59,11 @@
   function updateButton() {
     const button = document.getElementById('cellSandboxToggle');
     if (!button) return;
-    button.textContent = label();
+    // textContent への代入は値が同じでも childList の変更として記録される。
+    // 下の MutationObserver がこれを拾って無限ループになるため、
+    // 実際に変わるときだけ書き換える。
+    const text = label();
+    if (button.textContent !== text) button.textContent = text;
     button.dataset.sandbox = sandboxEnabled ? 'on' : 'off';
     button.setAttribute('aria-pressed', String(!sandboxEnabled));
     button.title = sandboxEnabled
@@ -135,9 +139,21 @@
     applyAll();
   }
 
+  // 監視中に自分でDOMを変更すると再度コールバックが呼ばれる。
+  // 念のため監視を外してから処理し、終わってから再開する。
+  let reacting = false;
   const observer = new MutationObserver(() => {
-    ensureButton();
-    applyAll();
+    if (reacting) return;
+    reacting = true;
+    observer.disconnect();
+    try {
+      ensureButton();
+      applyAll();
+    } finally {
+      observer.takeRecords();
+      observer.observe(document.documentElement, { childList: true, subtree: true });
+      reacting = false;
+    }
   });
   observer.observe(document.documentElement, { childList: true, subtree: true });
 

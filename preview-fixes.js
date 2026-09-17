@@ -95,7 +95,13 @@
       .replace(/@import\s+(["'])([^"']+)\1/gi,(m,q,target)=>{const path=resolveProjectPath(cssPath,target);return path&&urls.has(path)?'@import url("'+urls.get(path)+'")':m;});
   }
   function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
-  function rewriteHtml(html,htmlPath,urls,files){
+  async function transpileTsFile(file){
+    if(typeof globalThis.codeNestTranspileTS!=='function'){
+      throw new Error('TypeScriptランタイム(typescript-run.js)が読み込まれていません');
+    }
+    return globalThis.codeNestTranspileTS(file.source,file.ext==='.tsx');
+  }
+  async function rewriteHtml(html,htmlPath,urls,files){
     const doc=new DOMParser().parseFromString(html,'text/html');
     for(const el of doc.querySelectorAll('[src],[href],[poster]')){
       for(const attr of ['src','href','poster']){
@@ -113,7 +119,8 @@
         link.replaceWith(style);
       }
     }
-    for(const script of doc.querySelectorAll('script[src]')){
+    // <script src>はDOM順に処理する必要があるため for-of + await を使う（forEachはawaitできない）
+    for(const script of [...doc.querySelectorAll('script[src]')]){
       const raw=script.getAttribute('src'),path=resolveProjectPath(htmlPath,raw),file=path&&files.get(path);
       if(file&&(file.ext==='.js'||file.ext==='.mjs')){
         const inline=doc.createElement('script');
@@ -121,16 +128,35 @@
         inline.setAttribute('data-code-nest-file',file.path);
         inline.textContent=file.source.replace(/<\/(script)/gi,'<\\/$1');
         script.replaceWith(inline);
+      }else if(file&&(file.ext==='.ts'||file.ext==='.tsx')){
+        const inline=doc.createElement('script');
+        inline.type='module';
+        inline.setAttribute('data-code-nest-file',file.path);
+        try{
+          const js=await transpileTsFile(file);
+          inline.textContent=js.replace(/<\/(script)/gi,'<\\/$1');
+        }catch(e){
+          inline.textContent='console.error('+JSON.stringify('[Code Nest] TypeScriptのコンパイルに失敗しました: '+file.path+' — '+String(e&&e.message||e))+');';
+        }
+        script.replaceWith(inline);
       }
     }
     return '<!doctype html>'+doc.documentElement.outerHTML;
   }
   function currentHtml(){for(const f of cellFiles().values())if(f.ext==='.html'||f.ext==='.htm')return f;return null}
-  function injectLegacyAssets(html,files){
+  async function injectLegacyAssets(html,files){
     const css=[...files.values()].filter(f=>f.ext==='.css');
     const js=[...files.values()].filter(f=>f.ext==='.js'||f.ext==='.mjs');
+    const ts=[...files.values()].filter(f=>f.ext==='.ts'||f.ext==='.tsx');
     if(css.length&&!/<style\b/i.test(html)&&!/<link\b[^>]*stylesheet/i.test(html))html=html.replace(/<\/head>/i,css.map(f=>'<style data-code-nest-file="'+esc(f.path)+'">'+f.source+'</style>').join('')+'</head>');
     if(js.length&&!/<script\b[^>]*src=/i.test(html)&&!/<script\b/i.test(html))html=html.replace(/<\/body>/i,js.map(f=>'<script'+(f.ext==='.mjs'?' type="module"':'')+' data-code-nest-file="'+esc(f.path)+'">'+f.source.replace(/<\/(script)/gi,'<\\/$1')+'</script>').join('')+'</body>');
+    if(ts.length&&!/<script\b/i.test(html)){
+      const compiled=await Promise.all(ts.map(async f=>{
+        try{return {file:f,js:await transpileTsFile(f)};}
+        catch(e){return {file:f,js:'console.error('+JSON.stringify('[Code Nest] TypeScriptのコンパイルに失敗しました: '+f.path+' — '+String(e&&e.message||e))+');'};}
+      }));
+      html=html.replace(/<\/body>/i,compiled.map(({file,js})=>'<script type="module" data-code-nest-file="'+esc(file.path)+'">'+js.replace(/<\/(script)/gi,'<\\/$1')+'</script>').join('')+'</body>');
+    }
     return html;
   }
   let activeUrls=[];
@@ -147,7 +173,7 @@
     modal.setAttribute('aria-hidden','false');
     return true;
   }
-  function buildPreview(){
+  async function buildPreview(){
     const files=cellFiles(),htmlFile=currentHtml();
     if(!htmlFile)return {html:'<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><h2>Code Nest preview</h2><p>HTMLセル（例: <code>index.html</code>）を追加すると、プロジェクトとしてプレビューできます。</p></body></html>',urls:new Map(),title:'project preview'};
     const urls=makeBlobs(files);
@@ -156,17 +182,23 @@
       if(old)URL.revokeObjectURL(old);
       urls.set(file.path,URL.createObjectURL(new Blob([rewriteCss(file.source,file.path,urls)],{type:'text/css'})));
     }
-    let html=rewriteHtml(htmlFile.source,htmlFile.path,urls,files);
-    html=injectLegacyAssets(html,files);
+    let html=await rewriteHtml(htmlFile.source,htmlFile.path,urls,files);
+    html=await injectLegacyAssets(html,files);
     return {html,urls,title:htmlFile.path};
   }
-  function openProjectPreview(label){
+  let previewBuildToken=0;
+  async function openProjectPreview(label){
     const frame=$('#previewFrame');
     if(!frame)return toast('プレビュー画面が見つかりません');
-    activeUrls.forEach(u=>{try{URL.revokeObjectURL(u)}catch(_){}});
-    activeUrls=[];
+    const hasTs=[...cellFiles().values()].some(f=>f.ext==='.ts'||f.ext==='.tsx');
+    if(hasTs)toast('TypeScriptをコンパイル中…');
+    const token=++previewBuildToken; // 連打で古いビルドが後から反映されるのを防ぐ
     try{
-      const built=buildPreview(),u=URL.createObjectURL(new Blob([built.html],{type:'text/html'}));
+      const built=await buildPreview();
+      if(token!==previewBuildToken)return; // このビルドは既に古い
+      activeUrls.forEach(u=>{try{URL.revokeObjectURL(u)}catch(_){}});
+      activeUrls=[];
+      const u=URL.createObjectURL(new Blob([built.html],{type:'text/html'}));
       activeUrls=[u,...built.urls.values()];
       frame.src=u;
       frame.dataset.previewUrl=u;
@@ -178,11 +210,11 @@
     }catch(e){toast('プレビューの生成に失敗しました');console.error('[Code Nest preview]',e)}
   }
 
-  function previewable(name){return /\.(html?|css|m?js)$/i.test(name)}
+  function previewable(name){return /\.(html?|css|m?js|tsx?)$/i.test(name)}
   function isPython(name){return !previewable(name)}
 
   function iconForExt(ext){
-    const map={'.html':'</>','.htm':'</>','.css':'{}','.js':'JS','.mjs':'JS','.py':'🐍','.json':'{}','.ts':'TS'};
+    const map={'.html':'</>','.htm':'</>','.css':'{}','.js':'JS','.mjs':'JS','.py':'🐍','.json':'{}','.ts':'TS','.tsx':'TS'};
     return map[ext]||'⌘';
   }
   function updateFilenameUI(cell){
@@ -215,23 +247,50 @@
     const isHtml=lang==='.html'||lang==='.htm';
     const isCss=lang==='.css';
     const isPy=lang==='.py';
-    const isJs=lang==='.js'||lang==='.mjs';
+    const isTs=lang==='.ts'||lang==='.tsx';
+    const isJs=lang==='.js'||lang==='.mjs'||isTs;
+    // TypeScript固有のキーワード（型・修飾子など）。JS/Pythonと同じ枠で強調表示する。
+    const tsKeywords='type|interface|enum|implements|extends|public|private|protected|readonly|abstract|namespace|declare|as|is|keyof|infer|satisfies|override|get|set|static|void|never|unknown|any|string|number|boolean|undefined|null';
+    const keywordGroup=isTs
+      ? `const|let|var|function|return|if|else|for|while|class|new|import|from|export|async|await|try|catch|throw|switch|case|break|continue|${tsKeywords}`
+      : 'const|let|var|function|return|if|else|for|while|class|new|import|from|export|async|await|try|catch|throw|switch|case|break|continue|def|print|in|is|not|and|or|True|False|None';
+    const keywordRe=new RegExp(`^(?:${keywordGroup})$`);
     const tokenRe=isHtml
       ? /(<!--[\s\S]*?-->|<\/?[A-Za-z][^>]*>)/g
       : isCss
-      ? /(\/\*[\s\S]*?\*\/|#[0-9a-fA-F]{3,8}\b|\b\d+(?:\.\d+)?(?:px|rem|em|%|vh|vw|s|ms)?\b|[A-Za-z-]+(?=\s*:)|[A-Za-z-]+(?=\s*\())
-      : /(\/\/[^\n]*|\/\*[\s\S]*?\*\/|#[^\n]*$|'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|\b\d+(?:\.\d+)?\b|\b(?:const|let|var|function|return|if|else|for|while|class|new|import|from|export|async|await|try|catch|throw|switch|case|break|continue|def|print|in|is|not|and|or|True|False|None)\b|\b[A-Za-z_$][\w$]*(?=\s*\())/gm;
+      ? /(\/\*[\s\S]*?\*\/|#[0-9a-fA-F]{3,8}\b|\b\d+(?:\.\d+)?(?:px|rem|em|%|vh|vw|s|ms)?\b|[A-Za-z-]+(?=\s*:)|[A-Za-z-]+(?=\s*\())/g
+      : new RegExp('(\\/\\/[^\\n]*|\\/\\*[\\s\\S]*?\\*\\/|#[^\\n]*$|\'(?:\\\\.|[^\'\\\\])*\'|"(?:\\\\.|[^"\\\\])*"|\\b\\d+(?:\\.\\d+)?\\b|\\b(?:'+keywordGroup+')\\b|\\b[A-Za-z_$][\\w$]*(?=\\s*\\())','gm');
     let out='',last=0,m;
     while((m=tokenRe.exec(source))){
       out+=esc(source.slice(last,m.index));
       const raw=m[0];
       if(isHtml){
-        if(raw.startsWith('<!--'))out+='<span class="cn-tok-comment">'+esc(raw)+'</span>';
-        else out+=esc(raw).replace(/(&lt;\/?)([A-Za-z][\w-]*)([^&]*?)(&gt;)/,(_,a,b,c,d)=>a+'<span class="cn-tok-tag">'+b+'</span>'+c+d).replace(/([A-Za-z_:][-\w:.]*)(=)("[^"]*"|'[^']*')/g,'<span class="cn-tok-attr">$1</span>$2<span class="cn-tok-string">$3</span>');
+        if(raw.startsWith('<!--')){
+          out+='<span class="cn-tok-comment">'+esc(raw)+'</span>';
+        }else{
+          // 属性を後段でもう一度スキャンすると、直前に挿入した<span>markup自体を
+          // 属性として誤検出してしまう（例: class="cn-tok-tag" を再ハイライト）。
+          // そのため rawの属性部分だけを一度走査し、都度エスケープしてから組み立てる。
+          const tagMatch=raw.match(/^(<\/?)([A-Za-z][\w-]*)([\s\S]*?)(\/?>)$/);
+          if(tagMatch){
+            const open=tagMatch[1],name=tagMatch[2],attrs=tagMatch[3],close=tagMatch[4];
+            const attrRe=/([A-Za-z_:][-\w:.]*)(\s*=\s*)("[^"]*"|'[^']*')/g;
+            let attrsOut='',ai=0,am;
+            while((am=attrRe.exec(attrs))){
+              attrsOut+=esc(attrs.slice(ai,am.index));
+              attrsOut+='<span class="cn-tok-attr">'+esc(am[1])+'</span>'+esc(am[2])+'<span class="cn-tok-string">'+esc(am[3])+'</span>';
+              ai=am.index+am[0].length;
+            }
+            attrsOut+=esc(attrs.slice(ai));
+            out+=esc(open)+'<span class="cn-tok-tag">'+esc(name)+'</span>'+attrsOut+esc(close);
+          }else{
+            out+=esc(raw);
+          }
+        }
       }else if(/^\/\//.test(raw)||/^\/\*/.test(raw)||/^#/.test(raw)&&isPy)out+='<span class="cn-tok-comment">'+esc(raw)+'</span>';
       else if(/^['"]/.test(raw))out+='<span class="cn-tok-string">'+esc(raw)+'</span>';
       else if(/^\d/.test(raw))out+='<span class="cn-tok-number">'+esc(raw)+'</span>';
-      else if(/^(const|let|var|function|return|if|else|for|while|class|new|import|from|export|async|await|try|catch|throw|switch|case|break|continue|def|print|in|is|not|and|or|True|False|None)$/.test(raw))out+='<span class="cn-tok-keyword">'+esc(raw)+'</span>';
+      else if(keywordRe.test(raw))out+='<span class="cn-tok-keyword">'+esc(raw)+'</span>';
       else if(isCss&&/^[A-Za-z-]+$/.test(raw))out+='<span class="cn-tok-attr">'+esc(raw)+'</span>';
       else out+='<span class="cn-tok-fn">'+esc(raw)+'</span>';
       last=m.index+raw.length;

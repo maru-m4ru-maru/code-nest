@@ -3,18 +3,18 @@
   'use strict';
 
   if (!document.querySelector('script[data-code-nest-preview-v4]')) {
-    document.write('<script src="preview-v4.js?v=42" data-code-nest-preview-v4><\\/script>');
+    document.write('<script src="preview-v4.js?v=42" data-code-nest-preview-v4><\/script>');
   }
 
   if (!document.querySelector('script[data-code-nest-cells-sandbox]')) {
-    document.write('<script src="cell-sandbox.js?v=49" data-code-nest-cells-sandbox><\\/script>');
+    document.write('<script src="cell-sandbox.js?v=49" data-code-nest-cells-sandbox><\/script>');
   }
 
   if (!document.querySelector('script[data-code-nest-project-idb]')) {
-    document.write('<script src="project-idb.js?v=60" data-code-nest-project-idb><\\/script>');
+    document.write('<script src="project-idb.js?v=60" data-code-nest-project-idb><\/script>');
   }
   if (!document.querySelector('script[data-code-nest-project-idb-runtime]')) {
-    document.write('<script src="project-idb-runtime.js?v=60" data-code-nest-project-idb-runtime><\\/script>');
+    document.write('<script src="project-idb-runtime.js?v=60" data-code-nest-project-idb-runtime><\/script>');
   }
 
   function loadDirectNotebookStore() {
@@ -162,8 +162,17 @@
       return;
     }
 
+    if (name.endsWith('.ts') || name.endsWith('.tsx')) {
+      if (typeof window.runTypeScriptCell === 'function') {
+        window.runTypeScriptCell(cell);
+      } else if (typeof window.showToast === 'function') {
+        window.showToast('TypeScriptプレビュー機能を読み込めませんでした');
+      }
+      return;
+    }
+
     if (typeof window.showToast === 'function') {
-      window.showToast('プレビューはHTML / CSS / JavaScriptセルに対応しています');
+      window.showToast('プレビューはHTML / CSS / JavaScript / TypeScriptセルに対応しています');
     }
   }, true);
 
