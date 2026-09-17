@@ -11,6 +11,8 @@
     sandbox: localStorage.getItem("codeNest.bash.sandbox") !== "off"
   };
 
+  let pyodidePromise = null;
+
   if (!document.getElementById("toast")) {
     const toast = document.createElement("div");
     toast.id = "toast";
@@ -53,8 +55,7 @@
     document.getElementById("bashInput");
 
   const status = text => {
-    const el =
-      document.getElementById("bashPrompt");
+    const el = document.getElementById("bashPrompt");
 
     if (el) {
       el.textContent =
@@ -67,18 +68,12 @@
 
     if (!root) return;
 
-    const line =
-      document.createElement("div");
-
-    line.className =
-      "bash-line " + cls;
-
-    line.textContent =
-      String(text);
+    const line = document.createElement("div");
+    line.className = "bash-line " + cls;
+    line.textContent = String(text);
 
     root.appendChild(line);
-    root.scrollTop =
-      root.scrollHeight;
+    root.scrollTop = root.scrollHeight;
   }
 
   function clear() {
@@ -213,60 +208,591 @@
     return button;
   }
 
-  async function loadRuntime() {
-    if (state.ready) {
-      return state.terminal;
-    }
-
-    if (state.loading) {
-      return state.terminalPromise;
-    }
-
-    state.loading = true;
-
-    state.terminalPromise =
-      (async () => {
-        globalThis.__codeNestBashSandbox =
-          state.sandbox;
-
-        if (
-          window.CodeNestBashRuntime &&
-          typeof window.CodeNestBashRuntime.create ===
-            "function"
-        ) {
-          state.terminal =
-            await window.CodeNestBashRuntime.create({
-              sandbox:
-                state.sandbox
-            });
-
-          state.ready = true;
-
-          return state.terminal;
-        }
-
-        state.terminal =
-          new BrowserShell(
-            state.sandbox
+  function loadScript(src) {
+    return new Promise(
+      (resolve, reject) => {
+        const existing =
+          document.querySelector(
+            `script[src="${src}"]`
           );
 
-        state.ready = true;
+        if (existing) {
+          if (
+            typeof globalThis.loadPyodide ===
+            "function"
+          ) {
+            resolve();
+            return;
+          }
 
-        return state.terminal;
-      })();
+          existing.addEventListener(
+            "load",
+            resolve,
+            { once: true }
+          );
 
-    return state.terminalPromise;
+          existing.addEventListener(
+            "error",
+            reject,
+            { once: true }
+          );
+
+          return;
+        }
+
+        const script =
+          document.createElement(
+            "script"
+          );
+
+        script.src = src;
+        script.async = true;
+
+        script.onload = () =>
+          resolve();
+
+        script.onerror = () =>
+          reject(
+            new Error(
+              "Pyodideの読み込みに失敗しました。"
+            )
+          );
+
+        document.head.appendChild(
+          script
+        );
+      }
+    );
+  }
+
+  async function loadPyodideRuntime() {
+    if (
+      globalThis.__codeNestPyodide &&
+      typeof globalThis.__codeNestPyodide.runPythonAsync ===
+        "function"
+    ) {
+      return globalThis.__codeNestPyodide;
+    }
+
+    if (
+      globalThis.pyodide &&
+      typeof globalThis.pyodide.runPythonAsync ===
+        "function"
+    ) {
+      globalThis.__codeNestPyodide =
+        globalThis.pyodide;
+
+      return globalThis.pyodide;
+    }
+
+    if (
+      !pyodidePromise
+    ) {
+      pyodidePromise =
+        (async () => {
+          if (
+            typeof globalThis.loadPyodide !==
+            "function"
+          ) {
+            await loadScript(
+              "https://cdn.jsdelivr.net/pyodide/v0.314.0.7/full/pyodide.js"
+            );
+          }
+
+          const runtime =
+            await globalThis.loadPyodide({
+              indexURL:
+                "https://cdn.jsdelivr.net/pyodide/v0.314.0.7/full/"
+            });
+
+          globalThis.__codeNestPyodide =
+            runtime;
+
+          return runtime;
+        })();
+    }
+
+    return pyodidePromise;
+  }
+
+  async function syncShellToPython(
+    shell
+  ) {
+    const pyodide =
+      await loadPyodideRuntime();
+
+    const pythonRoot =
+      "/home/coder";
+
+    try {
+      pyodide.FS.mkdirTree(
+        pythonRoot
+      );
+    } catch {}
+
+    for (
+      const dir of shell.dirs
+    ) {
+      if (
+        dir === "/" ||
+        dir === "/home" ||
+        dir === "/home/coder"
+      ) {
+        continue;
+      }
+
+      if (
+        dir.startsWith(
+          "/home/coder/"
+        )
+      ) {
+        try {
+          pyodide.FS.mkdirTree(
+            dir
+          );
+        } catch {}
+      }
+    }
+
+    for (
+      const [path, value] of shell.files
+    ) {
+      if (
+        !path.startsWith(
+          "/home/coder/"
+        )
+      ) {
+        continue;
+      }
+
+      const parent =
+        path.slice(
+          0,
+          path.lastIndexOf("/")
+        );
+
+      try {
+        pyodide.FS.mkdirTree(
+          parent
+        );
+      } catch {}
+
+      pyodide.FS.writeFile(
+        path,
+        String(value),
+        {
+          encoding:
+            "utf8"
+        }
+      );
+    }
+
+    shell.syncEnv();
+
+    const cwd =
+      shell.cwd.startsWith(
+        "/home/coder"
+      )
+        ? shell.cwd
+        : "/home/coder";
+
+    pyodide.runPython(
+      `
+import os
+import sys
+os.makedirs(${JSON.stringify(cwd)}, exist_ok=True)
+os.chdir(${JSON.stringify(cwd)})
+sys.path.insert(0, ${JSON.stringify(cwd)})
+`
+    );
+  }
+
+  function syncDirectoryFromPython(
+    shell,
+    path
+  ) {
+    const pyodide =
+      globalThis.__codeNestPyodide;
+
+    if (!pyodide) return;
+
+    let entries;
+
+    try {
+      entries =
+        pyodide.FS.readdir(path);
+    } catch {
+      return;
+    }
+
+    for (
+      const name of entries
+    ) {
+      if (
+        name === "." ||
+        name === ".."
+      ) {
+        continue;
+      }
+
+      const full =
+        path === "/"
+          ? "/" + name
+          : path + "/" + name;
+
+      let stat;
+
+      try {
+        stat =
+          pyodide.FS.stat(
+            full
+          );
+      } catch {
+        continue;
+      }
+
+      if (
+        pyodide.FS.isDir(
+          stat.mode
+        )
+      ) {
+        shell.dirs.add(
+          full
+        );
+
+        syncDirectoryFromPython(
+          shell,
+          full
+        );
+
+        continue;
+      }
+
+      if (
+        pyodide.FS.isFile(
+          stat.mode
+        )
+      ) {
+        if (
+          full.endsWith(
+            ".pyc"
+          ) ||
+          full.includes(
+            "/__pycache__/"
+          )
+        ) {
+          continue;
+        }
+
+        try {
+          const data =
+            pyodide.FS.readFile(
+              full,
+              {
+                encoding:
+                  "utf8"
+              }
+            );
+
+          shell.files.set(
+            full,
+            String(data)
+          );
+
+          shell.ensureParents(
+            full
+          );
+        } catch {}
+      }
+    }
+  }
+
+  async function syncPythonToShell(
+    shell
+  ) {
+    const pyodide =
+      await loadPyodideRuntime();
+
+    syncDirectoryFromPython(
+      shell,
+      "/home/coder"
+    );
+
+    shell.save();
+  }
+
+  async function executePython(
+    shell,
+    args
+  ) {
+    const pyodide =
+      await loadPyodideRuntime();
+
+    await syncShellToPython(
+      shell
+    );
+
+    let stdout = "";
+    let stderr = "";
+
+    pyodide.setStdout({
+      batched(text) {
+        stdout +=
+          String(text) +
+          "\n";
+      }
+    });
+
+    pyodide.setStderr({
+      batched(text) {
+        stderr +=
+          String(text) +
+          "\n";
+      }
+    });
+
+    const cwd =
+      shell.cwd.startsWith(
+        "/home/coder"
+      )
+        ? shell.cwd
+        : "/home/coder";
+
+    const pythonArgs =
+      args.slice();
+
+    const first =
+      pythonArgs[0] || "";
+
+    try {
+      if (
+        first ===
+          "--version" ||
+        first ===
+          "-V"
+      ) {
+        const version =
+          pyodide.runPython(
+            "import sys; sys.version"
+          );
+
+        return {
+          stdout:
+            version +
+            "\n",
+          stderr,
+          code: 0
+        };
+      }
+
+      if (
+        first ===
+        "-c"
+      ) {
+        const source =
+          pythonArgs
+            .slice(1)
+            .join(" ");
+
+        pyodide.globals.set(
+          "__code_nest_argv",
+          pythonArgs
+            .slice(1)
+        );
+
+        await pyodide.runPythonAsync(
+          `
+import os
+import sys
+
+os.chdir(${JSON.stringify(cwd)})
+sys.argv = ["-c"] + list(__code_nest_argv)
+
+exec(
+    compile(
+        ${JSON.stringify(source)},
+        "<string>",
+        "exec"
+    ),
+    globals(),
+    globals()
+)
+`
+        );
+
+        return {
+          stdout,
+          stderr,
+          code: 0
+        };
+      }
+
+      if (
+        first ===
+        "-m"
+      ) {
+        const module =
+          pythonArgs[1];
+
+        if (!module) {
+          return {
+            stdout,
+            stderr:
+              "python: option -m requires an argument\n",
+            code: 2
+          };
+        }
+
+        pyodide.globals.set(
+          "__code_nest_module_args",
+          pythonArgs
+            .slice(2)
+        );
+
+        await pyodide.runPythonAsync(
+          `
+import os
+import sys
+import runpy
+
+os.chdir(${JSON.stringify(cwd)})
+sys.argv = [${JSON.stringify(module)}] + list(__code_nest_module_args)
+
+runpy.run_module(
+    ${JSON.stringify(module)},
+    run_name="__main__"
+)
+`
+        );
+
+        return {
+          stdout,
+          stderr,
+          code: 0
+        };
+      }
+
+      if (
+        !first ||
+        first === "-"
+      ) {
+        const result =
+          pyodide.runPython(
+            "import sys; sys.version"
+          );
+
+        return {
+          stdout:
+            result +
+            "\n",
+          stderr,
+          code: 0
+        };
+      }
+
+      const scriptPath =
+        shell.normalize(
+          first
+        );
+
+      if (
+        !shell.files.has(
+          scriptPath
+        )
+      ) {
+        return {
+          stdout,
+          stderr:
+            `python: can't open file '${first}': [Errno 2] No such file or directory\n`,
+          code: 2
+        };
+      }
+
+      pyodide.globals.set(
+        "__code_nest_script_args",
+        pythonArgs
+          .slice(1)
+      );
+
+      await pyodide.runPythonAsync(
+        `
+import os
+import sys
+import runpy
+
+os.chdir(${JSON.stringify(cwd)})
+sys.argv = [${JSON.stringify(scriptPath)}] + list(__code_nest_script_args)
+
+runpy.run_path(
+    ${JSON.stringify(scriptPath)},
+    run_name="__main__"
+)
+`
+      );
+
+      await syncPythonToShell(
+        shell
+      );
+
+      return {
+        stdout,
+        stderr,
+        code: 0
+      };
+    } catch (error) {
+      let message =
+        error &&
+        error.message
+          ? String(error.message)
+          : String(error);
+
+      if (
+        message &&
+        !message.endsWith(
+          "\n"
+        )
+      ) {
+        message += "\n";
+      }
+
+      stderr +=
+        message;
+
+      try {
+        await syncPythonToShell(
+          shell
+        );
+      } catch {}
+
+      return {
+        stdout,
+        stderr,
+        code: 1
+      };
+    } finally {
+      pyodide.setStdout({
+        batched() {}
+      });
+
+      pyodide.setStderr({
+        batched() {}
+      });
+    }
   }
 
   class BrowserShell {
     constructor(sandbox = true) {
-      this.sandbox = sandbox;
+      this.sandbox =
+        sandbox;
+
       this.cwd = "/";
+
       this.dirs = new Set([
         "/",
         "/home",
         "/home/coder"
       ]);
+
       this.files = new Map([
         [
           "/README.txt",
@@ -300,7 +826,9 @@
           JSON.parse(raw);
 
         if (
-          Array.isArray(data.dirs)
+          Array.isArray(
+            data.dirs
+          )
         ) {
           this.dirs =
             new Set(
@@ -309,7 +837,9 @@
         }
 
         if (
-          Array.isArray(data.files)
+          Array.isArray(
+            data.files
+          )
         ) {
           this.files =
             new Map(
@@ -319,7 +849,7 @@
 
         if (
           typeof data.cwd ===
-            "string"
+          "string"
         ) {
           this.cwd =
             this.normalize(
@@ -330,7 +860,7 @@
         if (
           data.env &&
           typeof data.env ===
-            "object"
+          "object"
         ) {
           this.env = {
             ...this.env,
@@ -341,9 +871,7 @@
 
       this.dirs.add("/");
       this.dirs.add("/home");
-      this.dirs.add(
-        "/home/coder"
-      );
+      this.dirs.add("/home/coder");
 
       this.syncEnv();
     }
@@ -369,10 +897,9 @@
 
     normalize(path) {
       let value =
-        String(path ?? "");
-
-      value =
-        value.trim();
+        String(
+          path ?? ""
+        ).trim();
 
       if (!value) {
         return this.cwd;
@@ -399,7 +926,9 @@
 
       const parts = [];
 
-      for (const part of raw.split("/")) {
+      for (
+        const part of raw.split("/")
+      ) {
         if (
           !part ||
           part === "."
@@ -407,15 +936,13 @@
           continue;
         }
 
-        if (part === "..") {
-          if (parts.length) {
-            parts.pop();
-          }
-
-          continue;
+        if (
+          part === ".."
+        ) {
+          parts.pop();
+        } else {
+          parts.push(part);
         }
-
-        parts.push(part);
       }
 
       return "/" +
@@ -487,18 +1014,22 @@
       }
 
       const parts =
-        value
-          .split("/")
-          .filter(Boolean);
+        value.split(
+          "/"
+        ).filter(Boolean);
 
       let current = "";
 
-      for (const part of parts) {
+      for (
+        const part of parts
+      ) {
         current +=
           "/" + part;
 
         if (
-          !this.dirs.has(current)
+          !this.dirs.has(
+            current
+          )
         ) {
           this.dirs.add(
             current
@@ -590,7 +1121,9 @@
         return;
       }
 
-      if (this.files.has(value)) {
+      if (
+        this.files.has(value)
+      ) {
         this.files.delete(
           value
         );
@@ -600,7 +1133,9 @@
         return;
       }
 
-      if (!this.dirs.has(value)) {
+      if (
+        !this.dirs.has(value)
+      ) {
         if (force) return;
 
         throw new Error(
@@ -618,7 +1153,9 @@
         ...this.files.keys()
       ].filter(
         key =>
-          key.startsWith(prefix)
+          key.startsWith(
+            prefix
+          )
       );
 
       const dirs = [
@@ -641,13 +1178,17 @@
         );
       }
 
-      for (const key of children) {
+      for (
+        const key of children
+      ) {
         this.files.delete(
           key
         );
       }
 
-      for (const key of dirs) {
+      for (
+        const key of dirs
+      ) {
         this.dirs.delete(
           key
         );
@@ -665,12 +1206,18 @@
       destination
     ) {
       const src =
-        this.normalize(source);
+        this.normalize(
+          source
+        );
 
       const dest =
-        this.normalize(destination);
+        this.normalize(
+          destination
+        );
 
-      if (this.files.has(src)) {
+      if (
+        this.files.has(src)
+      ) {
         const parent =
           this.parent(dest);
 
@@ -692,7 +1239,9 @@
         return;
       }
 
-      if (!this.dirs.has(src)) {
+      if (
+        !this.dirs.has(src)
+      ) {
         throw new Error(
           `cp: ${source}: No such file or directory`
         );
@@ -711,11 +1260,15 @@
           )
       );
 
-      this.dirs.add(dest);
+      this.dirs.add(
+        dest
+      );
 
-      for (const dir of [
-        ...this.dirs
-      ]) {
+      for (
+        const dir of [
+          ...this.dirs
+        ]
+      ) {
         if (
           dir === src ||
           dir.startsWith(
@@ -764,10 +1317,14 @@
       destination
     ) {
       const src =
-        this.normalize(source);
+        this.normalize(
+          source
+        );
 
       const dest =
-        this.normalize(destination);
+        this.normalize(
+          destination
+        );
 
       if (
         !this.exists(src)
@@ -793,18 +1350,28 @@
 
     list(path = this.cwd) {
       const target =
-        this.normalize(path);
+        this.normalize(
+          path
+        );
 
-      if (this.files.has(target)) {
+      if (
+        this.files.has(target)
+      ) {
         return [
           {
-            name: this.base(target),
-            type: "file"
+            name:
+              this.base(
+                target
+              ),
+            type:
+              "file"
           }
         ];
       }
 
-      if (!this.dirs.has(target)) {
+      if (
+        !this.dirs.has(target)
+      ) {
         throw new Error(
           `ls: ${path}: No such file or directory`
         );
@@ -821,8 +1388,12 @@
       const names =
         new Map();
 
-      for (const dir of this.dirs) {
-        if (dir === target) {
+      for (
+        const dir of this.dirs
+      ) {
+        if (
+          dir === target
+        ) {
           continue;
         }
 
@@ -846,7 +1417,9 @@
         }
       }
 
-      for (const file of this.files.keys()) {
+      for (
+        const file of this.files.keys()
+      ) {
         if (
           file.startsWith(prefix)
         ) {
@@ -868,10 +1441,11 @@
       }
 
       return [...names.entries()]
-        .sort((a, b) =>
-          a[0].localeCompare(
-            b[0]
-          )
+        .sort(
+          (a, b) =>
+            a[0].localeCompare(
+              b[0]
+            )
         )
         .map(
           ([name, type]) => ({
@@ -888,8 +1462,13 @@
       let escaped = false;
 
       const flush = () => {
-        if (current !== "") {
-          tokens.push(current);
+        if (
+          current !== ""
+        ) {
+          tokens.push(
+            current
+          );
+
           current = "";
         }
       };
@@ -902,7 +1481,9 @@
         const ch =
           line[i];
 
-        if (escaped) {
+        if (
+          escaped
+        ) {
           current += ch;
           escaped = false;
           continue;
@@ -916,8 +1497,12 @@
           continue;
         }
 
-        if (quote) {
-          if (ch === quote) {
+        if (
+          quote
+        ) {
+          if (
+            ch === quote
+          ) {
             quote = "";
           } else {
             current += ch;
@@ -950,7 +1535,9 @@
           continue;
         }
 
-        if (ch === ">") {
+        if (
+          ch === ">"
+        ) {
           flush();
 
           if (
@@ -1005,7 +1592,9 @@
         const ch =
           line[i];
 
-        if (escaped) {
+        if (
+          escaped
+        ) {
           current += ch;
           escaped = false;
           continue;
@@ -1020,10 +1609,14 @@
           continue;
         }
 
-        if (quote) {
+        if (
+          quote
+        ) {
           current += ch;
 
-          if (ch === quote) {
+          if (
+            ch === quote
+          ) {
             quote = "";
           }
 
@@ -1040,7 +1633,7 @@
         }
 
         if (
-          ch === ";" 
+          ch === ";"
         ) {
           push(";");
           continue;
@@ -1072,22 +1665,27 @@
       );
 
       return {
-        commands: result,
+        commands:
+          result,
         operators
       };
     }
 
     expand(value) {
-      return String(value)
+      return String(
+        value
+      )
         .replace(
           /\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g,
           (_, key) =>
-            this.env[key] ?? ""
+            this.env[key] ??
+            ""
         )
         .replace(
           /\$([A-Za-z_][A-Za-z0-9_]*)/g,
           (_, key) =>
-            this.env[key] ?? ""
+            this.env[key] ??
+            ""
         );
     }
 
@@ -1098,8 +1696,11 @@
       let inputData =
         stdin;
 
-      let outputFile = "";
-      let append = false;
+      let outputFile =
+        "";
+
+      let append =
+        false;
 
       const args = [];
 
@@ -1111,7 +1712,9 @@
         const token =
           tokens[i];
 
-        if (token === "<") {
+        if (
+          token === "<"
+        ) {
           const next =
             tokens[++i];
 
@@ -1149,7 +1752,9 @@
           }
 
           outputFile =
-            this.expand(next);
+            this.expand(
+              next
+            );
 
           append =
             token === ">>";
@@ -1158,7 +1763,9 @@
         }
 
         args.push(
-          this.expand(token)
+          this.expand(
+            token
+          )
         );
       }
 
@@ -1200,13 +1807,19 @@
       stdin = ""
     ) {
       const tokens =
-        this.tokenize(line);
+        this.tokenize(
+          line
+        );
 
       const parts = [];
       let current = [];
 
-      for (const token of tokens) {
-        if (token === "|") {
+      for (
+        const token of tokens
+      ) {
+        if (
+          token === "|"
+        ) {
           parts.push(
             current
           );
@@ -1219,7 +1832,9 @@
         }
       }
 
-      if (current.length) {
+      if (
+        current.length
+      ) {
         parts.push(
           current
         );
@@ -1258,8 +1873,9 @@
 
     async exec(command) {
       const line =
-        String(command || "")
-          .trim();
+        String(
+          command || ""
+        ).trim();
 
       if (!line) {
         return {
@@ -1274,9 +1890,14 @@
           line
         );
 
-      let lastCode = 0;
-      let stdout = "";
-      let stderr = "";
+      let lastCode =
+        0;
+
+      let stdout =
+        "";
+
+      let stderr =
+        "";
 
       for (
         let i = 0;
@@ -1292,7 +1913,9 @@
 
         const previousOp =
           i > 0
-            ? parsed.operators[i - 1]
+            ? parsed.operators[
+                i - 1
+              ]
             : null;
 
         if (
@@ -1315,10 +1938,12 @@
           );
 
         stdout +=
-          result.stdout || "";
+          result.stdout ||
+          "";
 
         stderr +=
-          result.stderr || "";
+          result.stderr ||
+          "";
 
         lastCode =
           result.code;
@@ -1336,6 +1961,17 @@
       args,
       stdin
     ) {
+      if (
+        cmd === "python" ||
+        cmd === "python3" ||
+        cmd === "py"
+      ) {
+        return executePython(
+          this,
+          args
+        );
+      }
+
       switch (cmd) {
         case "":
           return {
@@ -1354,7 +1990,9 @@
           };
 
         case "printf": {
-          if (!args.length) {
+          if (
+            !args.length
+          ) {
             return {
               stdout: "",
               stderr: "",
@@ -1365,7 +2003,8 @@
           let format =
             args.shift();
 
-          let index = 0;
+          let index =
+            0;
 
           format =
             format.replace(
@@ -1377,12 +2016,14 @@
             format.replace(
               /%s/g,
               () =>
-                args[index++] ??
-                ""
+                args[
+                  index++
+                ] ?? ""
             );
 
           return {
-            stdout: format,
+            stdout:
+              format,
             stderr: "",
             code: 0
           };
@@ -1391,7 +2032,8 @@
         case "pwd":
           return {
             stdout:
-              this.cwd + "\n",
+              this.cwd +
+              "\n",
             stderr: "",
             code: 0
           };
@@ -1426,7 +2068,9 @@
             );
 
           if (
-            !this.dirs.has(next)
+            !this.dirs.has(
+              next
+            )
           ) {
             return {
               stdout: "",
@@ -1436,7 +2080,8 @@
             };
           }
 
-          this.cwd = next;
+          this.cwd =
+            next;
 
           this.syncEnv();
           this.save();
@@ -1453,9 +2098,14 @@
         }
 
         case "ls": {
-          let long = false;
-          let all = false;
-          let targets = [];
+          let long =
+            false;
+
+          let all =
+            false;
+
+          let targets =
+            [];
 
           for (
             const arg of args
@@ -1492,11 +2142,16 @@
             }
           }
 
-          if (!targets.length) {
-            targets = [this.cwd];
+          if (
+            !targets.length
+          ) {
+            targets = [
+              this.cwd
+            ];
           }
 
-          const lines = [];
+          const lines =
+            [];
 
           for (
             const target of targets
@@ -1515,40 +2170,49 @@
             }
 
             const entries =
-              this.list(path);
+              this.list(
+                path
+              );
 
             for (
               const entry of entries
             ) {
               if (
                 !all &&
-                entry.name.startsWith(".")
+                entry.name.startsWith(
+                  "."
+                )
               ) {
                 continue;
               }
 
-              if (long) {
+              if (
+                long
+              ) {
                 const full =
                   this.normalize(
                     path === "/"
                       ? "/" +
-                          entry.name
+                        entry.name
                       : path +
-                          "/" +
-                          entry.name
+                        "/" +
+                        entry.name
                   );
 
                 const type =
-                  entry.type === "dir"
+                  entry.type ===
+                    "dir"
                     ? "d"
                     : "-";
 
                 const size =
-                  entry.type === "file"
+                  entry.type ===
+                    "file"
                     ? String(
                         this.files.get(
                           full
-                        )?.length || 0
+                        )?.length ||
+                          0
                       )
                     : "0";
 
@@ -1558,11 +2222,12 @@
               } else {
                 lines.push(
                   entry.name +
-                    (
-                      entry.type === "dir"
-                        ? "/"
-                        : ""
-                    )
+                  (
+                    entry.type ===
+                      "dir"
+                      ? "/"
+                      : ""
+                  )
                 );
               }
             }
@@ -1571,30 +2236,40 @@
               targets.length > 1 &&
               lines.length
             ) {
-              lines.push("");
+              lines.push(
+                ""
+              );
             }
           }
 
           return {
             stdout:
               lines.join(" ") +
-              (lines.length ? "\n" : ""),
+              (
+                lines.length
+                  ? "\n"
+                  : ""
+              ),
             stderr: "",
             code: 0
           };
         }
 
         case "cat": {
-          if (!args.length) {
+          if (
+            !args.length
+          ) {
             return {
               stdout:
-                stdin || "",
+                stdin ||
+                "",
               stderr: "",
               code: 0
             };
           }
 
-          const chunks = [];
+          const chunks =
+            [];
 
           for (
             const file of args
@@ -1605,10 +2280,14 @@
                   file
                 )
               );
-            } catch (error) {
+            } catch (
+              error
+            ) {
               return {
                 stdout:
-                  chunks.join(""),
+                  chunks.join(
+                    ""
+                  ),
                 stderr:
                   String(
                     error.message ||
@@ -1628,7 +2307,9 @@
         }
 
         case "touch": {
-          if (!args.length) {
+          if (
+            !args.length
+          ) {
             return {
               stdout: "",
               stderr:
@@ -1646,16 +2327,22 @@
               );
 
             if (
-              this.dirs.has(path)
+              this.dirs.has(
+                path
+              )
             ) {
               continue;
             }
 
             const parent =
-              this.parent(path);
+              this.parent(
+                path
+              );
 
             if (
-              !this.dirs.has(parent)
+              !this.dirs.has(
+                parent
+              )
             ) {
               return {
                 stdout: "",
@@ -1666,7 +2353,9 @@
             }
 
             if (
-              !this.files.has(path)
+              !this.files.has(
+                path
+              )
             ) {
               this.files.set(
                 path,
@@ -1685,8 +2374,11 @@
         }
 
         case "mkdir": {
-          let parents = false;
-          const names = [];
+          let parents =
+            false;
+
+          const names =
+            [];
 
           for (
             const arg of args
@@ -1703,7 +2395,9 @@
             }
           }
 
-          if (!names.length) {
+          if (
+            !names.length
+          ) {
             return {
               stdout: "",
               stderr:
@@ -1721,7 +2415,9 @@
               );
 
             if (
-              this.files.has(path)
+              this.files.has(
+                path
+              )
             ) {
               return {
                 stdout: "",
@@ -1732,7 +2428,9 @@
             }
 
             if (
-              this.dirs.has(path)
+              this.dirs.has(
+                path
+              )
             ) {
               if (
                 parents
@@ -1749,11 +2447,15 @@
             }
 
             const parent =
-              this.parent(path);
+              this.parent(
+                path
+              );
 
             if (
               !parents &&
-              !this.dirs.has(parent)
+              !this.dirs.has(
+                parent
+              )
             ) {
               return {
                 stdout: "",
@@ -1763,7 +2465,9 @@
               };
             }
 
-            if (parents) {
+            if (
+              parents
+            ) {
               this.ensureParents(
                 path
               );
@@ -1784,9 +2488,14 @@
         }
 
         case "rm": {
-          let recursive = false;
-          let force = false;
-          const names = [];
+          let recursive =
+            false;
+
+          let force =
+            false;
+
+          const names =
+            [];
 
           for (
             const arg of args
@@ -1824,7 +2533,9 @@
             }
           }
 
-          if (!names.length) {
+          if (
+            !names.length
+          ) {
             return {
               stdout: "",
               stderr:
@@ -1842,7 +2553,9 @@
                 recursive,
                 force
               );
-            } catch (error) {
+            } catch (
+              error
+            ) {
               return {
                 stdout: "",
                 stderr:
@@ -1863,8 +2576,11 @@
         }
 
         case "cp": {
-          let recursive = false;
-          const names = [];
+          let recursive =
+            false;
+
+          const names =
+            [];
 
           for (
             const arg of args
@@ -1900,7 +2616,9 @@
             const source of names
           ) {
             if (
-              this.isDir(source) &&
+              this.isDir(
+                source
+              ) &&
               !recursive
             ) {
               return {
@@ -1915,7 +2633,9 @@
               destination;
 
             if (
-              this.isDir(destination)
+              this.isDir(
+                destination
+              )
             ) {
               dest =
                 this.normalize(
@@ -1932,7 +2652,9 @@
                 source,
                 dest
               );
-            } catch (error) {
+            } catch (
+              error
+            ) {
               return {
                 stdout: "",
                 stderr:
@@ -1965,7 +2687,9 @@
           }
 
           const destination =
-            args[args.length - 1];
+            args[
+              args.length - 1
+            ];
 
           const sources =
             args.slice(
@@ -1999,7 +2723,9 @@
                 source,
                 dest
               );
-            } catch (error) {
+            } catch (
+              error
+            ) {
               return {
                 stdout: "",
                 stderr:
@@ -2020,8 +2746,11 @@
         }
 
         case "head": {
-          let count = 10;
-          const files = [];
+          let count =
+            10;
+
+          const files =
+            [];
 
           for (
             let i = 0;
@@ -2040,7 +2769,9 @@
                   10
                 );
             } else if (
-              /^-\d+$/.test(arg)
+              /^-\d+$/.test(
+                arg
+              )
             ) {
               count =
                 Number(
@@ -2055,8 +2786,11 @@
 
           const text =
             files.length
-              ? files.map(file =>
-                  this.readFile(file)
+              ? files.map(
+                  file =>
+                    this.readFile(
+                      file
+                    )
                 ).join("")
               : stdin;
 
@@ -2077,8 +2811,11 @@
         }
 
         case "tail": {
-          let count = 10;
-          const files = [];
+          let count =
+            10;
+
+          const files =
+            [];
 
           for (
             let i = 0;
@@ -2097,7 +2834,9 @@
                   10
                 );
             } else if (
-              /^-\d+$/.test(arg)
+              /^-\d+$/.test(
+                arg
+              )
             ) {
               count =
                 Number(
@@ -2112,8 +2851,11 @@
 
           const text =
             files.length
-              ? files.map(file =>
-                  this.readFile(file)
+              ? files.map(
+                  file =>
+                    this.readFile(
+                      file
+                    )
                 ).join("")
               : stdin;
 
@@ -2129,7 +2871,9 @@
                     lines.length -
                       count -
                       (
-                        text.endsWith("\n")
+                        text.endsWith(
+                          "\n"
+                        )
                           ? 1
                           : 0
                       )
@@ -2142,10 +2886,17 @@
         }
 
         case "grep": {
-          let ignoreCase = false;
-          let lineNumbers = false;
-          let pattern = "";
-          let files = [];
+          let ignoreCase =
+            false;
+
+          let lineNumbers =
+            false;
+
+          let pattern =
+            "";
+
+          const files =
+            [];
 
           for (
             const arg of args
@@ -2153,15 +2904,18 @@
             if (
               arg === "-i"
             ) {
-              ignoreCase = true;
+              ignoreCase =
+                true;
             } else if (
               arg === "-n"
             ) {
-              lineNumbers = true;
+              lineNumbers =
+                true;
             } else if (
               !pattern
             ) {
-              pattern = arg;
+              pattern =
+                arg;
             } else {
               files.push(
                 arg
@@ -2169,7 +2923,9 @@
             }
           }
 
-          if (!pattern) {
+          if (
+            !pattern
+          ) {
             return {
               stdout: "",
               stderr:
@@ -2180,8 +2936,11 @@
 
           const text =
             files.length
-              ? files.map(file =>
-                  this.readFile(file)
+              ? files.map(
+                  file =>
+                    this.readFile(
+                      file
+                    )
                 ).join("")
               : stdin;
 
@@ -2193,7 +2952,8 @@
               ? pattern.toLowerCase()
               : pattern;
 
-          const matched = [];
+          const matched =
+            [];
 
           for (
             let i = 0;
@@ -2223,7 +2983,9 @@
 
           return {
             stdout:
-              matched.join("\n") +
+              matched.join(
+                "\n"
+              ) +
               (
                 matched.length
                   ? "\n"
@@ -2238,10 +3000,17 @@
         }
 
         case "wc": {
-          let lineMode = false;
-          let wordMode = false;
-          let charMode = false;
-          const files = [];
+          let lineMode =
+            false;
+
+          let wordMode =
+            false;
+
+          let charMode =
+            false;
+
+          const files =
+            [];
 
           for (
             const arg of args
@@ -2249,15 +3018,18 @@
             if (
               arg === "-l"
             ) {
-              lineMode = true;
+              lineMode =
+                true;
             } else if (
               arg === "-w"
             ) {
-              wordMode = true;
+              wordMode =
+                true;
             } else if (
               arg === "-c"
             ) {
-              charMode = true;
+              charMode =
+                true;
             } else {
               files.push(
                 arg
@@ -2270,33 +3042,42 @@
             !wordMode &&
             !charMode
           ) {
-            lineMode = true;
-            wordMode = true;
-            charMode = true;
+            lineMode =
+              true;
+
+            wordMode =
+              true;
+
+            charMode =
+              true;
           }
 
           const text =
             files.length
-              ? files.map(file =>
-                  this.readFile(file)
+              ? files.map(
+                  file =>
+                    this.readFile(
+                      file
+                    )
                 ).join("")
               : stdin;
 
           const lines =
             text
-              ? text.split("\n").length -
+              ? text.split("\n")
+                  .length -
                 (
-                  text.endsWith("\n")
+                  text.endsWith(
+                    "\n"
+                  )
                     ? 1
                     : 0
                 )
               : 0;
 
           const words =
-            text
-              .trim()
-              ? text
-                  .trim()
+            text.trim()
+              ? text.trim()
                   .split(/\s+/)
                   .length
               : 0;
@@ -2304,23 +3085,38 @@
           const chars =
             text.length;
 
-          const values = [];
+          const values =
+            [];
 
-          if (lineMode) {
-            values.push(lines);
+          if (
+            lineMode
+          ) {
+            values.push(
+              lines
+            );
           }
 
-          if (wordMode) {
-            values.push(words);
+          if (
+            wordMode
+          ) {
+            values.push(
+              words
+            );
           }
 
-          if (charMode) {
-            values.push(chars);
+          if (
+            charMode
+          ) {
+            values.push(
+              chars
+            );
           }
 
           return {
             stdout:
-              values.join(" ") +
+              values.join(
+                " "
+              ) +
               "\n",
             stderr: "",
             code: 0
@@ -2329,7 +3125,8 @@
 
         case "sort": {
           const text =
-            stdin || (
+            stdin ||
+            (
               args[0]
                 ? this.readFile(
                     args[0]
@@ -2338,8 +3135,7 @@
             );
 
           const lines =
-            text
-              .split("\n")
+            text.split("\n")
               .filter(
                 (line, index, arr) =>
                   index <
@@ -2347,7 +3143,10 @@
                   line !== ""
               )
               .sort(
-                (a, b) =>
+                (
+                  a,
+                  b
+                ) =>
                   a.localeCompare(
                     b
                   )
@@ -2368,7 +3167,8 @@
 
         case "uniq": {
           const text =
-            stdin || (
+            stdin ||
+            (
               args[0]
                 ? this.readFile(
                     args[0]
@@ -2379,15 +3179,17 @@
           const lines =
             text.split("\n");
 
-          const result = [];
+          const result =
+            [];
 
           for (
             const line of lines
           ) {
             if (
               !result.length ||
-              result[result.length - 1] !==
-                line
+              result[
+                result.length - 1
+              ] !== line
             ) {
               result.push(
                 line
@@ -2428,9 +3230,14 @@
           ];
 
           const build =
-            (dir, prefix) => {
+            (
+              dir,
+              prefix
+            ) => {
               const entries =
-                this.list(dir);
+                this.list(
+                  dir
+                );
 
               for (
                 let i = 0;
@@ -2455,7 +3262,7 @@
                     entry.name +
                     (
                       entry.type ===
-                      "dir"
+                        "dir"
                         ? "/"
                         : ""
                     )
@@ -2507,16 +3314,17 @@
             this.normalize(
               args.find(
                 arg =>
-                  !arg.startsWith("-") &&
-                  !(
-                    arg === "f" ||
-                    arg === "d"
-                  )
+                  !arg.startsWith(
+                    "-"
+                  ) &&
+                  arg !== "f" &&
+                  arg !== "d"
               ) ||
                 this.cwd
             );
 
-          let type = "";
+          let type =
+            "";
 
           const typeIndex =
             args.indexOf(
@@ -2544,7 +3352,8 @@
             };
           }
 
-          const results = [];
+          const results =
+            [];
 
           for (
             const dir of this.dirs
@@ -2608,7 +3417,9 @@
 
           return {
             stdout:
-              results.join("\n") +
+              results.join(
+                "\n"
+              ) +
               (
                 results.length
                   ? "\n"
@@ -2626,11 +3437,21 @@
                 this.env
               )
                 .sort(
-                  ([a], [b]) =>
-                    a.localeCompare(b)
+                  (
+                    [a],
+                    [b]
+                  ) =>
+                    a.localeCompare(
+                      b
+                    )
                 )
                 .map(
-                  ([key, value]) =>
+                  (
+                    [
+                      key,
+                      value
+                    ]
+                  ) =>
                     `${key}=${value}`
                 )
                 .join("\n") +
@@ -2640,17 +3461,26 @@
           };
 
         case "export": {
-          if (!args.length) {
+          if (
+            !args.length
+          ) {
             return {
               stdout:
                 Object.entries(
                   this.env
                 )
                   .map(
-                    ([key, value]) =>
+                    (
+                      [
+                        key,
+                        value
+                      ]
+                    ) =>
                       `declare -x ${key}="${value}"`
                   )
-                  .join("\n") +
+                  .join(
+                    "\n"
+                  ) +
                 "\n",
               stderr: "",
               code: 0
@@ -2705,7 +3535,9 @@
           for (
             const key of args
           ) {
-            delete this.env[key];
+            delete this.env[
+              key
+            ];
           }
 
           this.syncEnv();
@@ -2755,16 +3587,22 @@
               "false",
               "seq",
               "sleep",
-              "which"
+              "which",
+              "python",
+              "python3",
+              "py"
             ]);
 
-          const lines = [];
+          const lines =
+            [];
 
           for (
             const name of args
           ) {
             if (
-              builtins.has(name)
+              builtins.has(
+                name
+              )
             ) {
               lines.push(
                 `${name}: shell builtin`
@@ -2778,7 +3616,9 @@
 
           return {
             stdout:
-              lines.join("\n") +
+              lines.join(
+                "\n"
+              ) +
               (
                 lines.length
                   ? "\n"
@@ -2796,10 +3636,15 @@
                 .slice()
                 .reverse()
                 .map(
-                  (value, index) =>
+                  (
+                    value,
+                    index
+                  ) =>
                     `${String(index + 1).padStart(4)}  ${value}`
                 )
-                .join("\n") +
+                .join(
+                  "\n"
+                ) +
               (
                 state.history.length
                   ? "\n"
@@ -2881,12 +3726,14 @@
           if (
             numbers.length === 1
           ) {
-            end = numbers[0];
+            end =
+              numbers[0];
           } else if (
             numbers.length === 2
           ) {
             start =
               numbers[0];
+
             end =
               numbers[1];
           } else if (
@@ -2894,13 +3741,16 @@
           ) {
             start =
               numbers[0];
+
             step =
               numbers[1];
+
             end =
               numbers[2];
           }
 
-          const values = [];
+          const values =
+            [];
 
           if (
             step > 0
@@ -2930,7 +3780,9 @@
 
           return {
             stdout:
-              values.join("\n") +
+              values.join(
+                "\n"
+              ) +
               (
                 values.length
                   ? "\n"
@@ -2998,7 +3850,8 @@
                 "head tail grep wc sort uniq tree find",
                 "env export unset which history clear help",
                 "whoami uname date basename dirname",
-                "true false seq sleep"
+                "true false seq sleep",
+                "python python3 py"
               ].join("\n") +
               "\n",
             stderr: "",
@@ -3033,8 +3886,9 @@
     command
   ) {
     const cmd =
-      String(command || "")
-        .trim();
+      String(
+        command || ""
+      ).trim();
 
     if (!cmd) return;
 
@@ -3060,7 +3914,8 @@
         50
       );
 
-    state.historyIndex = -1;
+    state.historyIndex =
+      -1;
 
     try {
       const pipMatch =
@@ -3110,7 +3965,9 @@
         typeof result ===
         "string"
       ) {
-        if (result) {
+        if (
+          result
+        ) {
           print(result);
         }
       } else {
@@ -3133,7 +3990,9 @@
       }
 
       updatePrompt();
-    } catch (error) {
+    } catch (
+      error
+    ) {
       print(
         String(
           error &&
@@ -3184,7 +4043,8 @@
         }
 
         if (
-          event.key === "ArrowUp"
+          event.key ===
+          "ArrowUp"
         ) {
           if (
             !state.history.length
@@ -3218,7 +4078,8 @@
         }
 
         if (
-          event.key === "ArrowDown"
+          event.key ===
+          "ArrowDown"
         ) {
           if (
             !state.history.length
@@ -3259,7 +4120,6 @@
         ) {
           event.preventDefault();
           clear();
-          return;
         }
       }
     );
@@ -3285,9 +4145,12 @@
     setSandboxMode,
     clear,
     getState: () => ({
-      ready: state.ready,
-      loading: state.loading,
-      sandbox: state.sandbox
+      ready:
+        state.ready,
+      loading:
+        state.loading,
+      sandbox:
+        state.sandbox
     })
   };
 
