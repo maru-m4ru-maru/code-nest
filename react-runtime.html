@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>Code Nest - React Runtime</title>
+<style>
+  html, body { margin: 0; padding: 0; height: 100%; background: #ffffff; font-family: system-ui, sans-serif; }
+  #root { padding: 12px; }
+  #error-overlay {
+    display: none;
+    position: fixed; inset: 0;
+    background: #2b0000cc; color: #ffdcdc;
+    padding: 16px; font-family: ui-monospace, monospace; font-size: 13px;
+    white-space: pre-wrap; overflow: auto; z-index: 9999;
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+<div id="error-overlay"></div>
+
+<!-- React本体・JSXトランスパイラをCDNから読み込み -->
+<script src="https://cdn.jsdelivr.net/npm/react@18/umd/react.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/react-dom@18/umd/react-dom.production.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@babel/standalone/babel.min.js"></script>
+
+<script>
+(function () {
+  const errorBox = document.getElementById('error-overlay');
+  const rootEl = document.getElementById('root');
+  let reactRoot = null;
+
+  function showError(err) {
+    console.error(err);
+    errorBox.textContent = (err && err.stack) ? err.stack : String(err);
+    errorBox.style.display = 'block';
+  }
+
+  function clearError() {
+    errorBox.style.display = 'none';
+    errorBox.textContent = '';
+  }
+
+  function safeStringify(v) {
+    if (typeof v === 'string') return v;
+    try { return JSON.stringify(v); } catch (e) { return String(v); }
+  }
+
+  // console.log等を親ウィンドウ(Code Nest本体)の出力欄に転送する
+  ['log', 'warn', 'error', 'info'].forEach((level) => {
+    const original = console[level].bind(console);
+    console[level] = (...args) => {
+      original(...args);
+      try {
+        parent.postMessage({
+          source: 'code-nest-react',
+          type: 'console',
+          level,
+          args: args.map(safeStringify)
+        }, '*');
+      } catch (e) { /* noop */ }
+    };
+  });
+
+  function runCode(code) {
+    clearError();
+    try {
+      // JSX -> JSへ変換
+      const transformed = Babel.transform(code, { presets: ['react'] }).code;
+
+      // ユーザーのコードは「App という関数コンポーネントを定義する」前提で実行する
+      const factory = new Function(
+        'React', 'ReactDOM',
+        transformed + '\n;return (typeof App !== "undefined") ? App : null;'
+      );
+      const App = factory(React, ReactDOM);
+
+      if (!App) {
+        throw new Error(
+          'App という名前の関数コンポーネントを定義してください。\n例: function App() { return <h1>Hello</h1>; }'
+        );
+      }
+
+      if (!reactRoot) reactRoot = ReactDOM.createRoot(rootEl);
+      reactRoot.render(React.createElement(App));
+
+      parent.postMessage({ source: 'code-nest-react', type: 'success' }, '*');
+    } catch (err) {
+      showError(err);
+      parent.postMessage({
+        source: 'code-nest-react',
+        type: 'error',
+        message: (err && err.message) ? err.message : String(err)
+      }, '*');
+    }
+  }
+
+  // 親(Code Nest本体)からのコード送信を待ち受ける
+  window.addEventListener('message', (ev) => {
+    if (!ev.data || ev.data.type !== 'run') return;
+    runCode(ev.data.code || '');
+  });
+
+  // 準備完了を親に通知
+  parent.postMessage({ source: 'code-nest-react', type: 'ready' }, '*');
+})();
+</script>
+</body>
+</html>
