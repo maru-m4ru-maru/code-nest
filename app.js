@@ -165,11 +165,79 @@ if($('#apiSend'))$('#apiSend').onclick=sendApiRequest;
 if($('#apiClear'))$('#apiClear').onclick=()=>{$('#apiOutput').textContent='レスポンスがここに表示されます。';$('#apiStatus').textContent='Ready';$('#apiDuration').textContent=''};
 
 // Standalone interactive Bash console. It reuses the same browser-only shell as Terminal cells.
+
 const bashHistory=[];let bashHistoryIndex=-1;let bashCompletionBase='';let bashCompletionIndex=0;
+let bashSandboxEnabled=localStorage.getItem('codeNest.bash.sandbox')!=='off';
+
+function updateBashSandboxButton(){
+  const buttons=[...document.querySelectorAll('#bashSandboxToggle')];
+  if(!buttons.length)return;
+  const label=bashSandboxEnabled?'Sandbox ON':'Sandbox OFF';
+  for(const button of buttons){
+    button.textContent=label;
+    button.dataset.sandbox=bashSandboxEnabled?'on':'off';
+    button.setAttribute('aria-pressed',String(!bashSandboxEnabled));
+    button.title=bashSandboxEnabled
+      ? 'Bashのアプリケーション側Sandbox制限が有効です。クリックすると警告を表示してOFFにできます'
+      : 'Bashのアプリケーション側Sandbox制限がOFFです。クリックすると安全モードに戻します';
+  }
+}
+
+function setBashSandbox(enabled,announce=true){
+  bashSandboxEnabled=Boolean(enabled);
+  localStorage.setItem('codeNest.bash.sandbox',bashSandboxEnabled?'on':'off');
+  globalThis.__codeNestBashSandbox=bashSandboxEnabled;
+  updateBashSandboxButton();
+  if(announce){
+    const output=$('#bashOutput');
+    if(output){
+      const line=document.createElement('div');
+      line.className='bash-line '+(bashSandboxEnabled?'bash-system':'bash-error');
+      line.textContent=bashSandboxEnabled
+        ? '[Bash Sandbox] ON — application-level restrictions are enabled.'
+        : '[Bash Sandbox] OFF — application-level restrictions are disabled. Browser and WebAssembly isolation still apply.';
+      output.appendChild(line);
+      output.scrollTop=output.scrollHeight;
+    }
+  }
+}
+
+function toggleBashSandbox(){
+  if(bashSandboxEnabled){
+    const confirmed=window.confirm(
+      'Bash SandboxをOFFにしますか？\\n\\n' +
+      'OFFにするとCode Nest側の安全制限が弱くなります。\\n' +
+      '信頼できないコードやパッケージを実行しないでください。\\n\\n' +
+      '※ ブラウザ・WebAssembly・OSそのもののセキュリティ機構を無効化するものではありません。'
+    );
+    if(!confirmed)return;
+  }
+  setBashSandbox(!bashSandboxEnabled);
+}
+
+function ensureBashSandboxButton(){
+  const oldButtons=[...document.querySelectorAll('#bashSandboxToggle')];
+  for(const button of oldButtons)button.remove();
+
+  const actions=$('#bashModal .bash-head-actions');
+  if(!actions)return null;
+
+  const button=document.createElement('button');
+  button.type='button';
+  button.id='bashSandboxToggle';
+  button.className='bash-btn sandbox-toggle';
+  button.addEventListener('click',toggleBashSandbox);
+  const close=$('#bashCloseBtn',actions);
+  actions.insertBefore(button,close||null);
+  updateBashSandboxButton();
+  return button;
+}
+
 const bashCommands=['help','pwd','ls','cd','mkdir','touch','cat','echo','rm','clear','uname','whoami','date','python','pip','grep','sed','awk','jq','find','sort','uniq','wc','head','tail','tr','cut','paste'];
 let realBash=null;let realBashLoading=null;
 
 async function loadRealBash(){
+  globalThis.__codeNestBashSandbox=bashSandboxEnabled;
   if(realBash)return realBash;
   if(realBashLoading)return realBashLoading;
 
@@ -259,9 +327,10 @@ async function submitBashCommand(command){
   else{bashAppend(command,result,typeof result==='string'&&result.startsWith('bash:'))}
   saveFs();scheduleSave();updateBashPrompt()
 }
-$('#openBashBtn').onclick=()=>{openModal('#bashModal');updateBashPrompt();setTimeout(()=>$('#bashInput').focus(),30);if(!realBash&&!realBashLoading){loadRealBash().catch(()=>{});}};
+$('#openBashBtn').onclick=()=>{openModal('#bashModal');ensureBashSandboxButton();updateBashPrompt();setTimeout(()=>$('#bashInput').focus(),30);if(!realBash&&!realBashLoading){loadRealBash().catch(()=>{});}};
 $('#bashCloseBtn').onclick=()=>closeModal('#bashModal');
 $('#bashClearBtn').onclick=()=>{$('#bashOutput').innerHTML='';bashHistoryIndex=bashHistory.length;$('#bashInput').focus()};
+updateBashSandboxButton();
 $('#bashForm').onsubmit=async e=>{e.preventDefault();const input=$('#bashInput');const value=input.value;input.value='';await submitBashCommand(value)};
 $('#bashInput').addEventListener('keydown',e=>{
   if(e.key==='ArrowUp'){e.preventDefault();if(!bashHistory.length)return;bashHistoryIndex=Math.max(0,bashHistoryIndex-1);e.currentTarget.value=bashHistory[bashHistoryIndex]||''}
