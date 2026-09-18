@@ -104,7 +104,12 @@
   }
 
   function ensureButton() {
-    if (document.getElementById('cellSandboxToggle')) {
+    // Remove the legacy toggle created by preview-v4.js. The Cells Sandbox
+    // control is owned by this module, so there must be exactly one.
+    document.querySelectorAll('#cellsSandboxToggle').forEach((button) => button.remove());
+
+    const existing = document.getElementById('cellSandboxToggle');
+    if (existing) {
       updateButton();
       return;
     }
