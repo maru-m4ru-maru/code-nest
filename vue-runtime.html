@@ -6,9 +6,9 @@
 <script>
 (function(){
 'use strict';
-const runtimeRunId=new URLSearchParams(location.search).get('run')||null;const errorBox=document.getElementById('error-overlay'),mountEl=document.getElementById('app');
+const errorBox=document.getElementById('error-overlay'),mountEl=document.getElementById('app');
 let currentApp=null,currentCode='',readySent=false,pendingRun=null,loadModule=null;
-function post(data){try{parent.postMessage(Object.assign({source:'code-nest-vue',runId:runtimeRunId},data),'*')}catch(_){}}
+function post(data){try{parent.postMessage(Object.assign({source:'code-nest-vue'},data),'*')}catch(_){}}
 function showError(err){const m=(err&&err.stack)?err.stack:String(err);errorBox.textContent=m;errorBox.style.display='block';}
 function clearError(){errorBox.style.display='none';errorBox.textContent='';}
 function safe(v){if(typeof v==='string')return v;try{return JSON.stringify(v)}catch(_){return String(v)}}
@@ -40,7 +40,7 @@ async function runCode(code,runId){
     post({type:'success',runId});
   }catch(err){showError(err);post({type:'error',runId,message:String(err&&err.message||err)})}
 }
-window.addEventListener('message',ev=>{if(!ev.data||ev.data.type!=='run')return;const incoming=ev.data.runId??null;if(runtimeRunId&&String(incoming)!==String(runtimeRunId))return;runCode(ev.data.code||'',incoming)});
+window.addEventListener('message',ev=>{if(!ev.data||ev.data.type!=='run')return;runCode(ev.data.code||'',ev.data.runId||null)});
 boot();
 })();
 </script></body></html>

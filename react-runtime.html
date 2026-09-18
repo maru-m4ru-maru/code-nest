@@ -24,12 +24,26 @@ async function boot(){
     if(pendingRun)runCode(pendingRun.code,pendingRun.runId);
   }catch(err){showError(err);post({type:'error',runId:pendingRun?.runId||null,message:String(err&&err.message||err)})}
 }
+function normalizeReactImports(code){
+  return code
+    .replace(/import\\s+React\\s*,\\s*\\{([^}]*)\\}\\s*from\\s*["']react["']\\s*;?/g,(m,names)=>names.split(',').map(x=>x.trim()).filter(Boolean).map(name=>{const p=name.split(/\\s+as\\s+/i);return 'const '+(p[1]||p[0])+' = React.'+p[0]+';'}).join('\\n'))
+    .replace(/import\\s+\\{([^}]*)\\}\\s*from\\s*["']react["']\\s*;?/g,(m,names)=>names.split(',').map(x=>x.trim()).filter(Boolean).map(name=>{const p=name.split(/\\s+as\\s+/i);return 'const '+(p[1]||p[0])+' = React.'+p[0]+';'}).join('\\n'))
+    .replace(/import\\s+React\\s+from\\s*["']react["']\\s*;?/g,'')
+    .replace(/import\\s+\\*\\s+as\\s+React\\s+from\\s*["']react["']\\s*;?/g,'')
+    .replace(/import\\s+\\{([^}]*)\\}\\s*from\\s*["']react-dom\\/client["']\\s*;?/g,(m,names)=>names.split(',').map(x=>x.trim()).filter(Boolean).map(name=>{const p=name.split(/\\s+as\\s+/i);return 'const '+(p[1]||p[0])+' = ReactDOM.'+p[0]+';'}).join('\\n'))
+    .replace(/import\\s+ReactDOM\\s+from\\s*["']react-dom\\/client["']\\s*;?/g,'')
+    .replace(/import\\s+\\*\\s+as\\s+ReactDOM\\s+from\\s*["']react-dom\\/client["']\\s*;?/g,'');
+}
 function runCode(code,runId){
   pendingRun={code,runId};
   if(!readySent)return;
   clearError();
   try{
-    const transformed=Babel.transform(code,{presets:['react']}).code;
+    const normalized=normalizeReactImports(code);
+    const transformed=Babel.transform(normalized,{presets:['react']}).code;
+    if(/(^|\\n)\\s*import\\s+/m.test(transformed)){
+      throw new Error('未対応のimportです。Reactランタイムでは react / react-dom/client のimportを使用できます。');
+    }
     const factory=new Function('React','ReactDOM',transformed+'\n;return (typeof App!=="undefined")?App:null;');
     const App=factory(React,ReactDOM);
     if(!App)throw new Error('App という名前の関数コンポーネントを定義してください。\n例: function App() { return <h1>Hello</h1>; }');
