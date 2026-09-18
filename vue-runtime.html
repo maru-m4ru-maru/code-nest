@@ -1,114 +1,46 @@
 <!DOCTYPE html>
 <html lang="ja">
-<head>
-<meta charset="UTF-8">
-<title>Code Nest - Vue Runtime</title>
-<style>
-  html, body { margin: 0; padding: 0; height: 100%; background: #ffffff; font-family: system-ui, sans-serif; }
-  #app { padding: 12px; }
-  #error-overlay {
-    display: none;
-    position: fixed; inset: 0;
-    background: #2b0000cc; color: #ffdcdc;
-    padding: 16px; font-family: ui-monospace, monospace; font-size: 13px;
-    white-space: pre-wrap; overflow: auto; z-index: 9999;
-  }
-</style>
-</head>
-<body>
-<div id="app"></div>
-<div id="error-overlay"></div>
-
-<!-- Vue3本体・単一ファイルコンポーネント(.vue)をビルドレスで読み込むためのローダー -->
-<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/vue3-sfc-loader/dist/vue3-sfc-loader.js"></script>
-
+<head><meta charset="UTF-8"><title>Code Nest - Vue Runtime</title>
+<style>html,body{margin:0;padding:0;height:100%;background:#fff;font-family:system-ui,sans-serif}#app{padding:12px}#error-overlay{display:none;position:fixed;inset:0;background:#2b0000cc;color:#ffdcdc;padding:16px;font:13px ui-monospace,monospace;white-space:pre-wrap;overflow:auto;z-index:9999}</style>
+</head><body><div id="app"></div><div id="error-overlay"></div>
 <script>
-(function () {
-  const errorBox = document.getElementById('error-overlay');
-  const mountEl = document.getElementById('app');
-  let currentApp = null;
-  let currentCode = '';
-
-  function showError(err) {
-    console.error(err);
-    errorBox.textContent = (err && err.stack) ? err.stack : String(err);
-    errorBox.style.display = 'block';
-  }
-
-  function clearError() {
-    errorBox.style.display = 'none';
-    errorBox.textContent = '';
-  }
-
-  // console.log等を親ウィンドウ(Code Nest本体)の出力欄に転送する
-  ['log', 'warn', 'error', 'info'].forEach((level) => {
-    const original = console[level].bind(console);
-    console[level] = (...args) => {
-      original(...args);
-      try {
-        parent.postMessage({
-          source: 'code-nest-vue',
-          type: 'console',
-          level,
-          args: args.map((a) => (typeof a === 'string' ? a : String(a)))
-        }, '*');
-      } catch (e) { /* noop */ }
-    };
-  });
-
-  const { loadModule } = window['vue3-sfc-loader'];
-
-  // 1セル = 1つの仮想的な.vueファイルとして扱う(ネットワーク取得は不要)
-  const sfcOptions = {
-    moduleCache: { vue: Vue },
-    getFile() {
-      return currentCode;
-    },
-    addStyle(textContent) {
-      const style = Object.assign(document.createElement('style'), { textContent });
-      document.head.appendChild(style);
-    },
-    log(type, ...args) {
-      if (type === 'error') showError(args.join(' '));
-    }
-  };
-
-  async function runCode(code) {
-    clearError();
-    currentCode = code;
-    try {
-      if (currentApp) {
-        currentApp.unmount();
-        currentApp = null;
-        mountEl.innerHTML = '';
-      }
-
-      const component = await loadModule('./cell.vue', sfcOptions);
-      currentApp = Vue.createApp(component);
-      currentApp.config.errorHandler = (err) => showError(err);
-      currentApp.mount(mountEl);
-
-      parent.postMessage({ source: 'code-nest-vue', type: 'success' }, '*');
-    } catch (err) {
-      showError(err);
-      parent.postMessage({
-        source: 'code-nest-vue',
-        type: 'error',
-        message: (err && err.message) ? err.message : String(err)
-      }, '*');
-    }
-  }
-
-  // 親(Code Nest本体)からのコード送信を待ち受ける
-  window.addEventListener('message', (ev) => {
-    if (!ev.data || ev.data.type !== 'run') return;
-    runCode(ev.data.code || '');
-  });
-
-  // 準備完了を親に通知
-  parent.postMessage({ source: 'code-nest-vue', type: 'ready' }, '*');
+(function(){
+'use strict';
+const errorBox=document.getElementById('error-overlay'),mountEl=document.getElementById('app');
+let currentApp=null,currentCode='',readySent=false,pendingRun=null,loadModule=null;
+function post(data){try{parent.postMessage(Object.assign({source:'code-nest-vue'},data),'*')}catch(_){}}
+function showError(err){const m=(err&&err.stack)?err.stack:String(err);errorBox.textContent=m;errorBox.style.display='block';}
+function clearError(){errorBox.style.display='none';errorBox.textContent='';}
+function safe(v){if(typeof v==='string')return v;try{return JSON.stringify(v)}catch(_){return String(v)}}
+['log','warn','error','info'].forEach(level=>{const o=console[level].bind(console);console[level]=(...args)=>{o(...args);post({type:'console',level,args:args.map(safe),runId:pendingRun?.runId||null})}});
+function loadScript(src){return new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src;s.onload=resolve;s.onerror=()=>reject(new Error('Vueランタイムの読み込みに失敗しました: '+src));document.head.appendChild(s)})}
+function options(){return{moduleCache:{vue:Vue},async getFile(){return currentCode},addStyle(t){const s=document.createElement('style');s.textContent=t;document.head.appendChild(s)},log(type,...args){if(type==='error')showError(args.join(' '))}}}
+async function boot(){
+  try{
+    await loadScript('https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js');
+    await loadScript('https://cdn.jsdelivr.net/npm/vue3-sfc-loader/dist/vue3-sfc-loader.js');
+    if(!window.Vue||!window['vue3-sfc-loader'])throw new Error('Vueランタイムの依存ファイルを読み込めませんでした');
+    loadModule=window['vue3-sfc-loader'].loadModule;
+    if(typeof loadModule!=='function')throw new Error('vue3-sfc-loaderのloadModuleが見つかりません');
+    readySent=true; post({type:'ready'});
+    if(pendingRun)runCode(pendingRun.code,pendingRun.runId);
+  }catch(err){showError(err);post({type:'error',runId:pendingRun?.runId||null,message:String(err&&err.message||err)})}
+}
+async function runCode(code,runId){
+  pendingRun={code,runId};currentCode=code;
+  if(!readySent)return;
+  clearError();
+  try{
+    if(currentApp){currentApp.unmount();currentApp=null;}
+    mountEl.innerHTML='';
+    const component=await loadModule('cell.vue',options());
+    currentApp=Vue.createApp(component);
+    currentApp.config.errorHandler=err=>showError(err);
+    currentApp.mount(mountEl);
+    post({type:'success',runId});
+  }catch(err){showError(err);post({type:'error',runId,message:String(err&&err.message||err)})}
+}
+window.addEventListener('message',ev=>{if(!ev.data||ev.data.type!=='run')return;runCode(ev.data.code||'',ev.data.runId||null)});
+boot();
 })();
-</script>
-</body>
-</html>
+</script></body></html>

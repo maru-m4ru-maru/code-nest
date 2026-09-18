@@ -6,13 +6,13 @@ window.addEventListener('message',(event)=>{
   if(!frame||event.source!==frame.contentWindow||!frameworkRuntime.framework)return;
   const expected='code-nest-'+frameworkRuntime.framework;
   if(data.source!==expected)return;
+  if(data.runId&&data.runId!==frameworkRuntime.runId)return;
   if(data.type==='ready'){
     frameworkRuntime.ready=true;
     if(frameworkRuntime.timer){clearTimeout(frameworkRuntime.timer);frameworkRuntime.timer=null;}
-    const out=frameworkRuntime.output;
-    if(out)out.textContent='実行中…';
-    try{frame.contentWindow.postMessage({type:'run',code:frameworkRuntime.code},'*')}catch(e){
-      if(out){out.textContent=String(e&&e.message||e);out.classList.add('error')}
+    try{frame.contentWindow.postMessage({type:'run',runId:frameworkRuntime.runId,code:frameworkRuntime.code},'*')}catch(e){
+      const out=frameworkRuntime.output;
+      if(out){out.textContent=String(e&&e.message||e);out.classList.add('error');}
     }
     return;
   }
@@ -21,60 +21,56 @@ window.addEventListener('message',(event)=>{
   if(data.type==='console'){
     const args=Array.isArray(data.args)?data.args.map(x=>String(x)):[];
     const line='['+(data.level||'log')+'] '+args.join(' ');
-    out.textContent+=(out.textContent.trim()?'\\n':'')+line;
+    if(out.textContent==='実行中…')out.textContent='';
+    out.textContent+=(out.textContent?'\\n':'')+line;
     out.classList.add('visible');
     return;
   }
   if(data.type==='success'){
     out.classList.remove('error');
-    if(!out.textContent.trim()||out.textContent==='実行中…')out.textContent='実行成功';
+    if(!out.textContent.trim())out.textContent='実行成功';
+    scheduleSave();
     return;
   }
   if(data.type==='error'){
     out.classList.add('error');
     out.textContent=String(data.message||'実行に失敗しました');
+    scheduleSave();
   }
 });
+function frameworkTarget(framework){return framework==='react'?'./react-runtime.html':'./vue-runtime.html';}
 function runFrameworkCell(cell,framework){
   const frame=$('#previewFrame');
   const out=cell.querySelector('.output');
   const code=cell.querySelector('textarea')?.value||'';
-  if(!frame||!out){
-    if(typeof showToast==='function')showToast('プレビュー画面を初期化できませんでした');
+  if(!frame||!out){if(typeof showToast==='function')showToast('プレビュー画面を初期化できませんでした');return;}
+  if(framework!=='react'&&framework!=='vue'){
+    out.className='output visible error';
+    out.textContent='未対応のランタイム: '+framework;
     return;
   }
   if(frameworkRuntime.timer){clearTimeout(frameworkRuntime.timer);frameworkRuntime.timer=null;}
-  frameworkRuntime.frame=frame;
-  frameworkRuntime.framework=framework;
-  frameworkRuntime.cell=cell;
-  frameworkRuntime.output=out;
-  frameworkRuntime.code=code;
-  frameworkRuntime.ready=false;
+  frameworkRuntime.frame=frame; frameworkRuntime.framework=framework;
+  frameworkRuntime.cell=cell; frameworkRuntime.output=out;
+  frameworkRuntime.code=code; frameworkRuntime.ready=false;
   frameworkRuntime.runId+=1;
   const runId=frameworkRuntime.runId;
   out.className='output visible';
   out.textContent=framework==='react'?'Reactランタイムを起動中…':'Vueランタイムを起動中…';
   $('#previewLabel').textContent=framework==='react'?'Reactプレビュー':'Vueプレビュー';
   openModal('#previewModal');
-  const target=new URL(framework==='react'?'./react-runtime.html':'./vue-runtime.html',location.href).href;
-  const current=frame.getAttribute('src')?new URL(frame.getAttribute('src'),location.href).href:'';
-  if(current!==target){
-    frame.src=target;
-  }else if(frame.contentWindow){
-    frameworkRuntime.ready=true;
-    frame.contentWindow.postMessage({type:'run',code},'*');
-    out.textContent='実行中…';
-    frameworkRuntime.timer=null;
-    return;
-  }
+  const target=new URL(frameworkTarget(framework),location.href);
+  target.searchParams.set('run',String(runId));
+  frame.src=target.href;
   frameworkRuntime.timer=setTimeout(()=>{
     if(frameworkRuntime.runId!==runId||frameworkRuntime.ready)return;
     out.textContent=(framework==='react'?'React':'Vue')+'ランタイムの読み込みがタイムアウトしました';
     out.classList.add('error');
     frameworkRuntime.timer=null;
+    scheduleSave();
   },20000);
 }
-async function runCodeCell(cell){const name=(cell.querySelector('.cell-name')?.value||'cell.py').trim().toLowerCase();if(name.endsWith('.html')||name.endsWith('.htm'))return previewCodeCell(cell);if(name.endsWith('.css'))return previewAssetCell(cell,'css');if(name.endsWith('.js')||name.endsWith('.mjs'))return previewAssetCell(cell,'js');if(name.endsWith('.react')||name.endsWith('.jsx'))return runFrameworkCell(cell,'react');if(name.endsWith('.vue'))return runFrameworkCell(cell,'vue');if(name.endsWith('.ts')||name.endsWith('.tsx'))return runTypeScriptCell(cell);return runPythonCell(cell)}
+function detectCellRuntime(name){const n=(name||'').trim().toLowerCase();if(n.endsWith('.html')||n.endsWith('.htm'))return 'html';if(n.endsWith('.css'))return 'css';if(n.endsWith('.js')||n.endsWith('.mjs'))return 'js';if(n.endsWith('.react')||n.endsWith('.jsx'))return 'react';if(n.endsWith('.vue'))return 'vue';if(n.endsWith('.ts')||n.endsWith('.tsx'))return 'typescript';return 'python'}async function runCodeCell(cell){const name=(cell.querySelector('.cell-name')?.value||'cell.py').trim().toLowerCase();switch(detectCellRuntime(name)){case'html':return previewCodeCell(cell);case'css':return previewAssetCell(cell,'css');case'js':return previewAssetCell(cell,'js');case'react':return runFrameworkCell(cell,'react');case'vue':return runFrameworkCell(cell,'vue');case'typescript':return runTypeScriptCell(cell);default:return runPythonCell(cell)}}
 function getCellSourceByExt(ext){const cells=$$('.cell[data-type="code"]');for(let i=cells.length-1;i>=0;i--){const n=(cells[i].querySelector('.cell-name')?.value||'').toLowerCase();if(n.endsWith(ext))return cells[i].querySelector('textarea').value}return ''}
 function previewAssetCell(cell,kind,overrideSrc){const src=overrideSrc!=null?overrideSrc:cell.querySelector('textarea').value;const frame=$('#previewFrame');let html=getCellSourceByExt('.html');if(!html)html='<!doctype html><html><head><meta charset="utf-8"></head><body><h2>Code Nest preview</h2><p>HTMLセルを追加すると、そこへCSS/JSを組み合わせます。</p></body></html>';if(!/<html\b/i.test(html))html='<!doctype html><html><head><meta charset="utf-8"></head><body>'+html+'</body></html>';if(kind==='css')html=html.replace('</head>','<style>'+src+'</style></head>');else html=html.replace('</body>','<script>'+src+'<\/script></body>');const blob=new Blob([html],{type:'text/html'});const u=URL.createObjectURL(blob);frame.src=u;$('#previewLabel').textContent=kind==='css'?'CSSセルのブラウザプレビュー':'JavaScriptセルのブラウザプレビュー';openModal('#previewModal');$('#previewNewTab').onclick=()=>window.open(u,'_blank','noopener');frame.dataset.previewUrl=u}
 async function runTypeScriptCell(cell){
