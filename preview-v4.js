@@ -27,78 +27,6 @@
     }
   }
 
-  function cellSandboxLabel() {
-    return cellsSandboxEnabled() ? '🔒 Cells Sandbox ON' : '⚠️ Cells Sandbox OFF';
-  }
-
-  function updateCellSandboxButton() {
-    const button = document.getElementById('cellsSandboxToggle');
-    if (!button) return;
-    button.textContent = cellSandboxLabel();
-    button.title = cellsSandboxEnabled()
-      ? 'CodeセルのPreviewをSandboxで実行中。クリックすると警告を表示してOFFにできます'
-      : 'Cells Sandbox OFF。クリックすると安全モードに戻します';
-    button.setAttribute('aria-pressed', String(!cellsSandboxEnabled()));
-    button.dataset.sandbox = cellsSandboxEnabled() ? 'on' : 'off';
-  }
-
-  function setCellsSandbox(enabled, announce = true) {
-    localStorage.setItem(CELL_SANDBOX_KEY, enabled ? 'on' : 'off');
-    updateCellSandboxButton();
-
-    const frame = modal && $('#codeNestPreviewFrameV4', modal);
-    applyCellSandbox(frame);
-    const state = modal && $('#cnp4-sandbox-state', modal);
-    if (state) state.textContent = enabled ? 'Cells Sandbox: ON' : '⚠️ Cells Sandbox: OFF';
-
-    if (announce && !enabled) {
-      warn('Cells Sandbox is OFF: project code runs without the preview iframe sandbox.');
-    }
-
-    document.dispatchEvent(new CustomEvent('code-nest-cells-sandbox-changed', {
-      detail: { enabled: Boolean(enabled) }
-    }));
-  }
-
-  function toggleCellSandbox() {
-    if (cellsSandboxEnabled()) {
-      const confirmed = window.confirm(
-        'Cells SandboxをOFFにしますか？\n\n' +
-        '注意：OFFにするとCodeセルのHTML/CSS/JavaScript Previewが、iframeのSandbox制限なしで実行されます。' +
-        '信頼できないコードは実行しないでください。\n\n' +
-        '※ これはChromeやOS自体のセキュリティ機構を無効化するものではありません。'
-      );
-      if (!confirmed) return;
-      setCellsSandbox(false);
-      return;
-    }
-    setCellsSandbox(true);
-  }
-
-  function ensureCellsSandboxButton() {
-    const existing = document.getElementById('cellsSandboxToggle');
-    if (existing) {
-      updateCellSandboxButton();
-      return existing;
-    }
-
-    const toolbar = document.querySelector('.toolbar-left');
-    if (!toolbar) return null;
-
-    const button = document.createElement('button');
-    button.type = 'button';
-    button.id = 'cellsSandboxToggle';
-    button.className = 'tool-btn sandbox-toggle';
-    button.addEventListener('click', toggleCellSandbox);
-
-    const share = document.getElementById('shareBtn');
-    if (share) share.insertAdjacentElement('afterend', button);
-    else toolbar.insertBefore(button, toolbar.firstChild);
-
-    updateCellSandboxButton();
-    return button;
-  }
-
   function fileName(cell) {
     return (cell?.querySelector('.cell-name')?.value || '').trim();
   }
@@ -267,7 +195,6 @@
 
   function openPreview(source) {
     log('OPEN', source);
-    ensureCellsSandboxButton();
     const panel = ensureModal();
     const frame = $('#codeNestPreviewFrameV4', panel);
     const status = $('#cnp4-status', panel);
@@ -359,15 +286,8 @@
     const frame = modal && $('#codeNestPreviewFrameV4', modal);
     applyCellSandbox(frame);
     const state = modal && $('#cnp4-sandbox-state', modal);
-    if (state) state.textContent = cellsSandboxEnabled() ? 'Cells Sandbox: ON' : '⚠️ Cells Sandbox: OFF';
+    if (state) state.textContent = cellsSandboxEnabled() ? 'Cells Sandbox: ON' : 'Cells Sandbox: OFF';
   });
 
-  // Insert the control as soon as the Studio toolbar exists.
-  if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', ensureCellsSandboxButton, { once: true });
-  } else {
-    ensureCellsSandboxButton();
-  }
-
-  log('module ready V0.4.2');
+  log('module ready V0.4.3');
 })();
