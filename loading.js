@@ -171,8 +171,26 @@
       return;
     }
 
+    if (name.endsWith('.react') || name.endsWith('.jsx')) {
+      if (typeof window.runFrameworkCell === 'function') {
+        window.runFrameworkCell(cell, 'react');
+      } else if (typeof window.showToast === 'function') {
+        window.showToast('Reactランタイム機能を読み込めませんでした');
+      }
+      return;
+    }
+
+    if (name.endsWith('.vue')) {
+      if (typeof window.runFrameworkCell === 'function') {
+        window.runFrameworkCell(cell, 'vue');
+      } else if (typeof window.showToast === 'function') {
+        window.showToast('Vueランタイム機能を読み込めませんでした');
+      }
+      return;
+    }
+
     if (typeof window.showToast === 'function') {
-      window.showToast('プレビューはHTML / CSS / JavaScript / TypeScriptセルに対応しています');
+      window.showToast('プレビューはHTML / CSS / JavaScript / TypeScript / React / Vueセルに対応しています');
     }
   }, true);
 
