@@ -53,7 +53,7 @@
   }
 
   function label() {
-    return sandboxEnabled ? '🔒 Cells Sandbox ON' : '⚠️ Cells Sandbox OFF';
+    return sandboxEnabled ? 'Cell Sandbox ON' : 'Cell Sandbox OFF';
   }
 
   function updateButton() {

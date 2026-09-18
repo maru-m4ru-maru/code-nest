@@ -8,7 +8,7 @@
     terminalPromise: null,
     history: [],
     historyIndex: -1,
-    sandbox: localStorage.getItem("codeNest.bash.sandbox") !== "off"
+    sandbox: globalThis.__codeNestCellsSandbox !== false
   };
 
   let pyodidePromise = null;
@@ -79,133 +79,6 @@
   function clear() {
     const root = output();
     if (root) root.textContent = "";
-  }
-
-  function sandboxLabel() {
-    return state.sandbox
-      ? "Sandbox ON"
-      : "Sandbox OFF";
-  }
-
-  function updateSandboxButton() {
-    const button =
-      document.getElementById(
-        "bashSandboxToggle"
-      );
-
-    if (!button) return;
-
-    button.textContent =
-      sandboxLabel();
-
-    button.title =
-      state.sandbox
-        ? "安全モード。クリックするとOFFにできます"
-        : "Sandbox OFF。クリックすると安全モードに戻します";
-
-    button.setAttribute(
-      "aria-pressed",
-      String(!state.sandbox)
-    );
-
-    button.dataset.sandbox =
-      state.sandbox
-        ? "on"
-        : "off";
-  }
-
-  function setSandboxMode(
-    enabled,
-    announce = true
-  ) {
-    state.sandbox =
-      Boolean(enabled);
-
-    localStorage.setItem(
-      "codeNest.bash.sandbox",
-      state.sandbox
-        ? "on"
-        : "off"
-    );
-
-    updateSandboxButton();
-
-    globalThis.__codeNestBashSandbox =
-      state.sandbox;
-
-    if (announce) {
-      print(
-        state.sandbox
-          ? "[Sandbox] ON"
-          : "[Sandbox] OFF",
-        state.sandbox
-          ? "bash-system"
-          : "bash-error"
-      );
-    }
-  }
-
-  function toggleSandbox() {
-    if (state.sandbox) {
-      const confirmed =
-        window.confirm(
-          "SandboxをOFFにしますか？\n\n" +
-          "Code Nest側の安全制限が弱くなります。" +
-          "信頼できないコードやパッケージを実行しないでください。\n\n" +
-          "ブラウザやOSのセキュリティ機構は無効になりません。"
-        );
-
-      if (!confirmed) return;
-
-      setSandboxMode(false);
-      return;
-    }
-
-    setSandboxMode(true);
-  }
-
-  function ensureSandboxButton() {
-    const existing =
-      document.getElementById(
-        "bashSandboxToggle"
-      );
-
-    if (existing) {
-      updateSandboxButton();
-      return existing;
-    }
-
-    const actions =
-      document.querySelector(
-        ".bash-head-actions"
-      );
-
-    if (!actions) return null;
-
-    const button =
-      document.createElement(
-        "button"
-      );
-
-    button.type = "button";
-    button.id =
-      "bashSandboxToggle";
-    button.className =
-      "bash-btn sandbox-toggle";
-
-    button.addEventListener(
-      "click",
-      toggleSandbox
-    );
-
-    actions.insertBefore(
-      button,
-      actions.lastElementChild || null
-    );
-
-    updateSandboxButton();
-
-    return button;
   }
 
   function loadScript(src) {
@@ -4126,14 +3999,10 @@ runpy.run_path(
   }
 
   function wire() {
-    ensureSandboxButton();
     wireInput();
     updatePrompt();
-
-    globalThis.__codeNestBashSandbox =
-      state.sandbox;
-
-    updateSandboxButton();
+    state.sandbox = globalThis.__codeNestCellsSandbox !== false;
+    globalThis.__codeNestBashSandbox = state.sandbox;
   }
 
   window.CodeNestBash = {
@@ -4141,8 +4010,7 @@ runpy.run_path(
     run: runCommand,
     loadRuntime,
     getSandbox:
-      () => state.sandbox,
-    setSandboxMode,
+      () => globalThis.__codeNestCellsSandbox !== false,
     clear,
     getState: () => ({
       ready:
@@ -4166,16 +4034,6 @@ runpy.run_path(
   } else {
     wire();
   }
-
-  setTimeout(
-    ensureSandboxButton,
-    0
-  );
-
-  setTimeout(
-    ensureSandboxButton,
-    250
-  );
 
   setTimeout(
     wireInput,
