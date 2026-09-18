@@ -6,7 +6,7 @@
     "use strict";
 
     const PYODIDE_VERSION = "0.27.7";
-    const SCRATCHATTACH_VERSION = "2.2.3";
+    const SCRATCHATTACH_VERSION = "2.2.5";
     const WORKER_URL =
         "https://code-nest-worker.maru-0727.workers.dev";
 
@@ -577,5 +577,5 @@ print("ScratchAttach browser compatibility ready")
     // Pyodide may already have been loaded before this module executes.
     wrapPyodideLoader();
 
-    log("pip.js loaded — V0.3.4");
+    log("pip.js loaded — V0.3.5");
 })();
