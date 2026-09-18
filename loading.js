@@ -3,11 +3,11 @@
   'use strict';
 
   if (!document.querySelector('script[data-code-nest-preview-v4]')) {
-    document.write('<script src="preview-v4.js?v=42" data-code-nest-preview-v4><\/script>');
+    document.write('<script src="preview-v4.js?v=43" data-code-nest-preview-v4><\/script>');
   }
 
   if (!document.querySelector('script[data-code-nest-cells-sandbox]')) {
-    document.write('<script src="cell-sandbox.js?v=49" data-code-nest-cells-sandbox><\/script>');
+    document.write('<script src="cell-sandbox.js?v=50" data-code-nest-cells-sandbox><\/script>');
   }
 
   if (!document.querySelector('script[data-code-nest-project-idb]')) {
