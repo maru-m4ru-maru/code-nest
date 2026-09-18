@@ -1,5 +1,5 @@
 // Code Nest - pip.js
-// V0.3.4
+// V0.3.5
 // Pyodide / micropip / ScratchAttach browser compatibility.
 
 (() => {
